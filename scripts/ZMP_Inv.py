@@ -283,7 +283,7 @@ def main():
 
     # # Default node initialization.
     # This name is replaced when a launch file is used.
-    rospy.init_node('ZMP_Inv')
+    rospy.init_node('ZMP_Inv_1')
 
     class_instance = ZMP_Inv()
 
