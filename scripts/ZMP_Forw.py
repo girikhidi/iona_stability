@@ -5,8 +5,9 @@
 import rospy
 
 from std_msgs.msg import (Float64MultiArray, Bool)
-from math import sqrt
-from  sensor_msgs.msg import (Imu)
+import math
+import numpy as np
+from oculus_ros.msg import ControllerJoystick
 
 class ZMP_Forw():
     """
@@ -21,11 +22,12 @@ class ZMP_Forw():
         """
 
         # # Private constants:
-        self.NODE_NAME='ZMP_simple'
+        self.NODE_NAME='ZMP_Forw'
         self.acc_x=0
         self.acc_y=0
         self.Mass_pos_fin=[0,0,0]
         self.Mass_rob=0
+        self.MAX_LINEAR_SPEED=0.5
 
         # # Initialization and dependency status topics:
         self.__is_initialized = False
@@ -62,16 +64,17 @@ class ZMP_Forw():
         )
 
         # # Topic subscriber:
-        rospy.Subscriber(
-            'MyBase/imu1', #change
-            Imu,
-            self.__IMU_callback,
-        )
 
         rospy.Subscriber(
             'COF_total/COM_Fin', #change
             Float64MultiArray,
             self.__COM_Total_callback,
+        )
+
+        rospy.Subscriber(
+            f'oculus/{self.CONTROLLER_SIDE}/joystick',
+            ControllerJoystick,
+            self.__oculus_joystick_callback,
         )
 
 
@@ -89,15 +92,13 @@ class ZMP_Forw():
 
 
     # # Topic callbacks:
-    def __IMU_callback(self, message):
-        self.acc_x = message.linear_acceleration[0]
-        self.acc_y = message.linear_acceleration[1]
 
     def __COM_Total_callback(self, message):
         self.Mass_pos_fin=[message.data[0], message.data[1], message.data[2]]
         self.Mass_rob=message.data[3]
         
- 
+    def __oculus_joystick_callback(self, message):
+        self.__oculus_joystick = message
 
     # # Private methods:
     def __check_initialization(self):
@@ -168,6 +169,111 @@ class ZMP_Forw():
         self.__node_is_initialized.publish(self.__is_initialized)
 
     # # Public methods:
+    def max_acc_calc(self, target_linear_acc):
+        R=math.sqrt(self.Mass_pos_fin[0]*self.Mass_pos_fin[0]+self.Mass_pos_fin[1]*self.Mass_pos_fin[1])
+        e=2.7
+        XlimUp=0.221/e
+        XlimLow=-0.221/e
+        YlimUp=0.221/e
+        YlimLow=-0.221/e
+        g=9.81
+
+        cosa=self.Mass_pos_fin[0]/R
+        sina=self.Mass_pos_fin[1]/R
+        tga=self.Mass_pos_fin[1]/self.Mass_pos_fin[0]
+        
+
+        acc_X_max=(XlimLow*self.Mass_rob*g-self.Mass_rob*self.Mass_pos_fin[0])/(-self.Mass_rob*self.Mass_pos_fin[2])
+       
+        acc_Y_max=(YlimLow*self.Mass_rob*g-self.Mass_rob*self.Mass_pos_fin[1])/(-self.Mass_rob*self.Mass_pos_fin[2])
+      
+
+        a_c_max=(acc_X_max-tga*acc_Y_max-target_linear_acc)/(-cosa-tga*sina)
+        a_t_max=(acc_Y_max-sina*a_c_max)/(cosa)
+        rot_vel=math.sqrt(a_c_max/R)
+        rot_acc=a_t_max/R
+        return rot_vel, rot_acc
+    
+    def target_val(self):
+        
+        g=9.81
+        e=2.7
+        XlimLow=-0.221/e
+
+        acc_X_max=(XlimLow*self.Mass_rob*g-self.Mass_rob*self.Mass_pos_fin[0])/(-self.Mass_rob*self.Mass_pos_fin[2])
+        
+        updated_joystick = self.__check_dead_zones()
+
+        if abs(self.__oculus_joystick.position_y) >= 0.01 and abs(self.__oculus_joystick.position_x) < 0.01:  # Noisy joystick.
+            targe_lin_vel = np.interp(
+                round(updated_joystick[1], 4),
+                [-1.0, 1.0],
+                [-self.MAX_LINEAR_SPEED, self.MAX_LINEAR_SPEED],
+            )
+            target_linear_acc = np.interp(
+                round(updated_joystick[1], 4),
+                [-1, -0.01, 0.01, 1.0],
+                [-0.8*acc_X_max, -0.8*acc_X_max, 0.08*acc_X_max, 0.8*acc_X_max],
+            )
+            rot_vel, rot_acc=self.acc_calc(target_linear_acc)
+            target_rot_vel=0
+            target_rot_acc=rot_acc
+
+        elif abs(self.__oculus_joystick.position_y) >= 0.01 and abs(self.__oculus_joystick.position_x) >= 0.01:
+            targe_lin_vel = np.interp(
+                round(updated_joystick[1], 4),
+                [-1.0, 1.0],
+                [-self.MAX_LINEAR_SPEED, self.MAX_LINEAR_SPEED],
+            )
+            target_linear_acc = np.interp(
+                round(updated_joystick[1], 4),
+                [-1, -0.01, 0.01, 1.0],
+                [-0.8*acc_X_max, -0.8*acc_X_max, 0.08*acc_X_max, 0.8*acc_X_max],
+            )
+            rot_vel, rot_acc=self.acc_calc(target_linear_acc)
+
+            target_rot_acc=np.interp(
+                round(updated_joystick[0], 4),
+                [-1, -0.01, 0.01, 1.0],
+                [-0.8*acc_X_max, -0.8*acc_X_max, 0.08*acc_X_max, 0.8*acc_X_max],
+            )
+            
+            target_rot_vel = np.interp(
+                round(updated_joystick[0], 4),
+                [-1.0, 1.0],
+                [-rot_vel, rot_vel],
+            )
+
+        elif abs(self.__oculus_joystick.position_y) < 0.01 and abs(self.__oculus_joystick.position_x) >= 0.01:
+            
+            targe_lin_vel = 0 
+            target_linear_acc= 0.8*acc_X_max
+            rot_vel, rot_acc=self.acc_calc(0)
+
+            target_rot_acc=np.interp(
+                round(updated_joystick[0], 4),
+                [-1, -0.01, 0.01, 1.0],
+                [-rot_acc, -0.01*rot_acc, 0.01*rot_acc, rot_acc],
+            )
+            
+            target_rot_vel = np.interp(
+                round(updated_joystick[0], 4),
+                [-1.0, 1.0],
+                [-rot_vel, rot_vel],
+            )
+
+        elif abs(self.__oculus_joystick.position_y) < 0.01 and abs(self.__oculus_joystick.position_x) < 0.01:
+            targe_lin_vel=0
+            target_linear_acc=0.8*acc_X_max
+            rot_vel, rot_acc=self.acc_calc(0)
+            target_rot_vel=0
+            target_rot_acc=rot_acc
+  
+
+        float64_array = Float64MultiArray()
+        float64_array.data=[target_linear_acc, target_rot_acc, target_rot_vel, targe_lin_vel]
+
+        self.__publisher.publish(float64_array)
 
     def main_loop(self):
         """
@@ -182,36 +288,7 @@ class ZMP_Forw():
         # NOTE: Add code (function calls), which has to be executed once the
         # node was successfully initialized.
 
-        R=sqrt(self.Mass_pos_fin[0]*self.Mass_pos_fin[0]+self.Mass_pos_fin[1]*self.Mass_pos_fin[1])
-        e=2.7
-        XlimUp=0.221/e
-        XlimLow=-0.221/e
-        YlimUp=0.221/e
-        YlimLow=-0.221/e
-        acc_rob=[self.acc_x, self.acc_y, 0]
-        g=9.81
-
-        cosa=self.Mass_pos_fin[0]/R
-        sina=self.Mass_pos_fin[1]/R
-        tga=self.Mass_pos_fin[1]/self.Mass_pos_fin[0]
-        
-
-        acc_X_max=(XlimUp*self.Mass_rob*g-self.Mass_rob*self.Mass_pos_fin[0])/(-self.Mass_rob*self.Mass_pos_fin[2])
-        acc_X_min=(XlimLow*self.Mass_rob*g-self.Mass_rob*self.Mass_pos_fin[0])/(-self.Mass_rob*self.Mass_pos_fin[2])
-        acc_Y_max=(YlimUp*self.Mass_rob*g-self.Mass_rob*self.Mass_pos_fin[1])/(-self.Mass_rob*self.Mass_pos_fin[2])
-        acc_Y_min=(YlimLow*self.Mass_rob*g-self.Mass_rob*self.Mass_pos_fin[1])/(-self.Mass_rob*self.Mass_pos_fin[2])
-        
-        target_linear_acc=0.8*acc_X_max
-        a_c_max=(acc_X_max-tga*acc_Y_max-self.target_linear_acc)/(-cosa-tga*sina)
-        a_t_max=(acc_Y_max-sina*a_c_max)/(cosa)
-        target_rot_vel=sqrt(a_c_max/R)
-        target_rot_acc=a_t_max/R
-
-
-        float64_array = Float64MultiArray()
-        float64_array.data=[target_linear_acc, target_rot_acc, target_rot_vel]
-
-        self.__publisher.publish(float64_array)
+        self.target_val()
         
     def node_shutdown(self):
         """
