@@ -4,11 +4,15 @@
 """
 import rospy
 
-from std_msgs.msg import (Float64MultiArray, Bool)
+from std_msgs.msg import (Float64MultiArray, Bool, Float)
 from geometry_msgs import Twist
-from math import sqrt
+import math 
 from  sensor_msgs.msg import (Imu)
 from gopher_ros_clearcore.msg import Position
+from oculus_ros.msg import ControllerJoystick
+import numpy as np
+
+
 
 class ZMP_Inv():
     """
@@ -16,7 +20,7 @@ class ZMP_Inv():
     """
 
     def __init__(
-        self 
+        self      
     ):
         """
         
@@ -32,7 +36,9 @@ class ZMP_Inv():
         self.flag=0
         self.prev_pos=0
         self.counter=0
-        
+        self.CONTROLLER_SIDE='left'
+        self.MAX_LINEAR_SPEED=0.5
+        self.steady_pos=self.Pos_c
 
         # # Initialization and dependency status topics:
         self.__is_initialized = False
@@ -62,15 +68,21 @@ class ZMP_Inv():
 
         # # Topic publisher:
         #Change 
-        self.__publisher_pos = rospy.Publisher(
-            'z_chest_vel/Twist',
-            Twist,
+        self.__publisher_abs_pos = rospy.Publisher(
+            f'{self.NODE_NAME}/Z_abs_pos',
+            Float,
             queue_size=1,
         )
 
         self.__publisher = rospy.Publisher(
             f'{self.NODE_NAME}/ZMP_ACC',
             Float64MultiArray,
+            queue_size=1,
+        )
+
+        self.__publisher_pos_rel = rospy.Publisher(
+            f'{self.NODE_NAME}/Z_pos_rel',
+            Float,
             queue_size=1,
         )
 
@@ -93,6 +105,11 @@ class ZMP_Inv():
             self.__Chest_Pos_callback,
         )
 
+        rospy.Subscriber(
+            f'oculus/{self.CONTROLLER_SIDE}/joystick',
+            ControllerJoystick,
+            self.__oculus_joystick_callback,
+        )
 
     # # Dependency status callbacks:
     # NOTE: each dependency topic should have a callback function, which will
@@ -117,6 +134,9 @@ class ZMP_Inv():
 
     def __Chest_Pos_callback(self, message):
         self.Pos_c=message.position
+    
+    def __oculus_joystick_callback(self, message):
+        self.__oculus_joystick = message
  
 
     # # Private methods:
@@ -188,6 +208,186 @@ class ZMP_Inv():
         self.__node_is_initialized.publish(self.__is_initialized)
 
     # # Public methods:
+
+    def __check_dead_zones(self):
+        """
+        
+        """
+
+        updated_joystick = np.array(
+            [
+                self.__oculus_joystick.position_x,
+                self.__oculus_joystick.position_y,
+            ]
+        )
+
+        dead_zone_margins = {
+            'up': 15,
+            'down': 25,
+            'left_right': 0,
+        }
+
+        angle = math.degrees(
+            math.atan2(updated_joystick[1], updated_joystick[0])
+        )
+
+        if (
+            (
+                angle < 90 + dead_zone_margins['up']
+                and angle > 90 - dead_zone_margins['up']
+            ) or (
+                angle > -90 - dead_zone_margins['down']
+                and angle < -90 + dead_zone_margins['down']
+            )
+        ):
+            updated_joystick[0] = 0.0
+
+        elif (
+            (
+                angle < 0 + dead_zone_margins['left_right']
+                and angle > 0 - dead_zone_margins['down']
+            ) or (
+                angle < -180 + dead_zone_margins['left_right']
+                and angle > 180 - dead_zone_margins['down']
+            )
+        ):
+            updated_joystick[1] = 0.0
+
+        return updated_joystick
+    
+    def acc_calc(self, target_linear_acc):
+
+        R=math.sqrt(self.Mass_pos_fin[0]*self.Mass_pos_fin[0]+self.Mass_pos_fin[1]*self.Mass_pos_fin[1])
+        e=2.7
+        XlimLow=-0.221/e
+        YlimLow=-0.221/e
+        cosa=self.Mass_pos_fin[0]/R
+        sina=self.Mass_pos_fin[1]/R
+        tga=self.Mass_pos_fin[1]/self.Mass_pos_fin[0]
+
+        g=9.81
+        acc_X_max_current=(XlimLow*self.Mass_rob*g-self.Mass_rob*self.Mass_pos_fin[0])/(-self.Mass_rob*self.Mass_pos_fin[2])
+        acc_Y_max_current=(YlimLow*self.Mass_rob*g-self.Mass_rob*self.Mass_pos_fin[1])/(-self.Mass_rob*self.Mass_pos_fin[2])
+        a_c_max=(acc_X_max_current-tga*acc_Y_max_current-target_linear_acc)/(-cosa-tga*sina)
+        a_t_max=(acc_Y_max_current-sina*a_c_max)/(cosa)
+        rot_vel=math.sqrt(a_c_max/R)
+        rot_acc=a_t_max/R
+
+        return rot_vel, rot_acc
+    
+    def target_val(self):
+        R=math.sqrt(self.Mass_pos_fin[0]*self.Mass_pos_fin[0]+self.Mass_pos_fin[1]*self.Mass_pos_fin[1])
+        e=2.7
+        XlimLow=-0.221/e
+        g=9.81
+        P_gain=1
+
+        cosa=self.Mass_pos_fin[0]/R
+        sina=self.Mass_pos_fin[1]/R
+
+        hb=0.359
+        hc=0.386
+
+        acc_X_max=(XlimLow*self.Mass_rob*g-self.Mass_rob*self.Mass_pos_fin[0])/(-self.Mass_rob*(hb+hc))
+        
+        updated_joystick = self.__check_dead_zones()
+
+        if abs(self.__oculus_joystick.position_y) > 0.01 and abs(self.__oculus_joystick.position_x) <= 0.01:  # Noisy joystick.
+            targe_lin_vel = np.interp(
+                round(updated_joystick[1], 4),
+                [-1.0, 1.0],
+                [-self.MAX_LINEAR_SPEED, self.MAX_LINEAR_SPEED],
+            )
+            target_linear_acc = np.interp(
+                round(updated_joystick[1], 4),
+                [0, 1.0],
+                [0.08*acc_X_max, 0.8*acc_X_max],
+            )
+            counter=0
+            [rot_vel, rot_acc]=self.acc_calc(target_linear_acc)
+            target_rot_vel=0
+            target_rot_acc=rot_acc
+
+        elif abs(self.__oculus_joystick.position_y) > 0.01 and abs(self.__oculus_joystick.position_x) > 0.01:
+            targe_lin_vel = np.interp(
+                round(updated_joystick[1], 4),
+                [-1.0, 1.0],
+                [-self.MAX_LINEAR_SPEED, self.MAX_LINEAR_SPEED],
+            )
+            target_linear_acc = np.interp(
+                round(updated_joystick[1], 4),
+                [0, 1.0],
+                [0.08*acc_X_max, 0.8*acc_X_max],
+            )
+            
+            counter=0
+            [rot_vel, rot_acc]=self.acc_calc(target_linear_acc)
+
+            target_rot_acc=np.interp(
+                round(updated_joystick[0], 4),
+                [0, 1.0],
+                [0.01*rot_acc, rot_acc],
+            )
+            
+            target_rot_vel = np.interp(
+                round(updated_joystick[0], 4),
+                [-1.0, 1.0],
+                [-rot_vel, rot_vel],
+            )
+
+        elif abs(self.__oculus_joystick.position_y) <= 0.01 and abs(self.__oculus_joystick.position_x) > 0.01:
+            
+            targe_lin_vel = 0 
+            target_linear_acc= 0.8*acc_X_max
+
+            counter=0
+            [rot_vel, rot_acc]=self.acc_calc(0)
+
+            target_rot_acc=np.interp(
+                round(updated_joystick[0], 4),
+                [0, 1.0],
+                [0.01*rot_acc, rot_acc],
+            )
+            
+            target_rot_vel = np.interp(
+                round(updated_joystick[0], 4),
+                [-1.0, 1.0],
+                [-rot_vel, rot_vel],
+            )
+
+        elif abs(self.__oculus_joystick.position_y) < 0.01:
+            targe_lin_vel=0
+            target_linear_acc=0.8*acc_X_max
+            [rot_vel, rot_acc]=self.acc_calc(0)
+            target_rot_vel=0
+            target_rot_acc=rot_acc
+            counter=counter+1
+            if counter >50:
+                steady_pos=self.Pos_c
+
+        acc_X_max_current=(XlimLow*self.Mass_rob*g-self.Mass_rob*self.Mass_pos_fin[0])/(-self.Mass_rob*self.Mass_pos_fin[2])
+        
+        a_c=R*target_rot_vel*target_rot_vel
+        a_t=R*target_rot_acc
+        acc_X_current=-a_c*cosa+a_t*sina+target_linear_acc
+
+        if acc_X_max_current>acc_X_current:
+            add_pos=steady_pos-self.Pos_c
+        else:
+            e_acc=acc_X_max_current-acc_X_current
+            add_pos=e_acc*P_gain
+  
+        #abs_pos_msg = Float()
+        add_pos_msg = Float()
+        float64_array = Float64MultiArray()
+        #abs_pos_msg.data=abs_pos
+        add_pos_msg.data=add_pos
+        float64_array.data=[target_linear_acc, target_rot_acc, target_rot_vel, targe_lin_vel]
+
+        self.__publisher.publish(float64_array)
+        #self.__publisher_abs_pos.publish(abs_pos_msg)
+        self.__publisher_pos_rel.publish(add_pos_msg)
+    
     def main_loop(self):
         """
         
@@ -200,65 +400,8 @@ class ZMP_Inv():
 
         # NOTE: Add code (function calls), which has to be executed once the
         # node was successfully initialized.
-
-        R=sqrt(self.Mass_pos_fin[0]*self.Mass_pos_fin[0]+self.Mass_pos_fin[1]*self.Mass_pos_fin[1])
-        e=2.7
-        XlimUp=0.221/e
-        XlimLow=-0.221/e
-        YlimUp=0.221/e
-        YlimLow=-0.221/e
-        acc_rob=[self.acc_x, self.acc_y, 0]
-        g=9.81
-
-        cosa=self.Mass_pos_fin[0]/R
-        sina=self.Mass_pos_fin[1]/R
-        tga=self.Mass_pos_fin[1]/self.Mass_pos_fin[0]
-
-        hb=0.359
-        hc=0.386 # height of the origin of the cheat coordinate system
-
-        acc_X_max=(XlimUp*self.Mass_rob*g-self.Mass_rob*self.Mass_pos_fin[0])/(-self.Mass_rob*(hb+hc))
-        acc_X_min=(XlimLow*self.Mass_rob*g-self.Mass_rob*self.Mass_pos_fin[0])/(-self.Mass_rob*(hb+hc))
-        acc_Y_max=(YlimUp*self.Mass_rob*g-self.Mass_rob*self.Mass_pos_fin[1])/(-self.Mass_rob*(hb+hc))
-        acc_Y_min=(YlimLow*self.Mass_rob*g-self.Mass_rob*self.Mass_pos_fin[1])/(-self.Mass_rob*(hb+hc))
+        self.target_val()
         
-        if abs(self.__oculus_joystick.position_y) > 0.01 or abs(self.__oculus_joystick.position_x) > 0.01:  # Noisy joystick.
-            target_linear_acc=0.8*acc_X_max
-            a_c_max=(acc_X_max-tga*acc_Y_max-self.target_linear_acc)/(-cosa-tga*sina)
-            a_t_max=(acc_Y_max-sina*a_c_max)/(cosa)
-            target_rot_vel=sqrt(a_c_max/R)
-            target_rot_acc=a_t_max/R
-            
-            self.flag=1
-            self.counter=0
-        else:
-            self.counter = self.counter + 1
-            self.flag=0
-            self.prev_pos=self.Pos_c
-
-        twist_msg = Twist()
-        float64_array = Float64MultiArray()
-
-        if self.flag==1:
-            twist_msg.linear.x = 0.0  
-            twist_msg.linear.y = 0.0  
-            twist_msg.linear.z = 0.0  
-            twist_msg.angular.x = 0.0  
-            twist_msg.angular.y = 0.0  
-            twist_msg.angular.z = 0.0  
-        elif self.flag==0 and self.counter >50:
-            twist_msg.linear.x = 0.0  
-            twist_msg.linear.y = 0.0  
-            twist_msg.linear.z = self.prev_pos  
-            twist_msg.angular.x = 0.0  
-            twist_msg.angular.y = 0.0  
-            twist_msg.angular.z = 0.0  
-
-        
-        float64_array.data=[target_linear_acc, target_rot_acc, target_rot_vel]
-
-        self.__publisher.publish(float64_array)
-        self.__publisher.__publisher_pos(twist_msg)
 
 
         
@@ -283,7 +426,7 @@ def main():
 
     # # Default node initialization.
     # This name is replaced when a launch file is used.
-    rospy.init_node('ZMP_Inv_1')
+    rospy.init_node('ZMP_Inv')
 
     class_instance = ZMP_Inv()
 
