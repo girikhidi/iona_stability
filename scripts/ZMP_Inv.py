@@ -304,7 +304,7 @@ class ZMP_Inv():
                 [0.08*acc_X_max, 0.8*acc_X_max],
             )
             counter=0
-            [rot_vel, rot_acc]=self.acc_calc(target_linear_acc)
+            rot_vel, rot_acc=self.acc_calc(target_linear_acc)
             target_rot_vel=0
             target_rot_acc=rot_acc
 
@@ -321,7 +321,7 @@ class ZMP_Inv():
             )
             
             counter=0
-            [rot_vel, rot_acc]=self.acc_calc(target_linear_acc)
+            rot_vel, rot_acc=self.acc_calc(target_linear_acc)
 
             target_rot_acc=np.interp(
                 round(updated_joystick[0], 4),
@@ -341,7 +341,7 @@ class ZMP_Inv():
             target_linear_acc= 0.8*acc_X_max
 
             counter=0
-            [rot_vel, rot_acc]=self.acc_calc(0)
+            rot_vel, rot_acc=self.acc_calc(0)
 
             target_rot_acc=np.interp(
                 round(updated_joystick[0], 4),
@@ -358,7 +358,7 @@ class ZMP_Inv():
         elif abs(self.__oculus_joystick.position_y) < 0.01:
             targe_lin_vel=0
             target_linear_acc=0.8*acc_X_max
-            [rot_vel, rot_acc]=self.acc_calc(0)
+            rot_vel, rot_acc=self.acc_calc(0)
             target_rot_vel=0
             target_rot_acc=rot_acc
             counter=counter+1
