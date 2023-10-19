@@ -22,12 +22,13 @@ class ZMP_Forw():
         """
 
         # # Private constants:
-        self.NODE_NAME='ZMP_Forw'
+        self.NODE_NAME='zmp_forw'
         self.acc_x=0
         self.acc_y=0
         self.Mass_pos_fin=[0,0,0]
         self.Mass_rob=0
         self.MAX_LINEAR_SPEED=0.5
+        self.__oculus_joystick = ControllerJoystick()
 
         # # Initialization and dependency status topics:
         self.__is_initialized = False
@@ -58,7 +59,7 @@ class ZMP_Forw():
         # # Topic publisher:
         #Change 
         self.__publisher = rospy.Publisher(
-            f'{self.NODE_NAME}/ZMP_ACC',
+            f'{self.NODE_NAME}/zmp_acc',
             Float64MultiArray,
             queue_size=1,
         )
@@ -66,7 +67,7 @@ class ZMP_Forw():
         # # Topic subscriber:
 
         rospy.Subscriber(
-            'COF_total/COM_Fin', #change
+             'calc_com_total/com_fin', #change
             Float64MultiArray,
             self.__COM_Total_callback,
         )
@@ -213,7 +214,7 @@ class ZMP_Forw():
             target_linear_acc = np.interp(
                 round(updated_joystick[1], 4),
                 [-1, -0.01, 0.01, 1.0],
-                [-0.8*acc_X_max, -0.8*acc_X_max, 0.08*acc_X_max, 0.8*acc_X_max],
+                [-0.8*acc_X_max, -0.08*acc_X_max, 0.08*acc_X_max, 0.8*acc_X_max],
             )
             rot_vel, rot_acc=self.acc_calc(target_linear_acc)
             target_rot_vel=0
@@ -311,7 +312,7 @@ def main():
 
     # # Default node initialization.
     # This name is replaced when a launch file is used.
-    rospy.init_node('ZMP_Forw')
+    rospy.init_node('zmp_forw')
 
     class_instance = ZMP_Forw()
 

@@ -5,7 +5,7 @@
 import rospy
 
 from std_msgs.msg import (Float64MultiArray, Bool, Float)
-from geometry_msgs import Twist
+from geometry_msgs.msg import Point
 import math 
 from  sensor_msgs.msg import (Imu)
 from gopher_ros_clearcore.msg import Position
@@ -27,7 +27,7 @@ class ZMP_Inv():
         """
 
         # # Private constants:
-        self.NODE_NAME='ZMP_Inv'
+        self.NODE_NAME='zmp_inv'
         self.acc_x=0
         self.acc_y=0
         self.Mass_pos_fin=[0,0,0]
@@ -69,33 +69,23 @@ class ZMP_Inv():
 
         # # Topic publisher:
         #Change 
-        self.__publisher_abs_pos = rospy.Publisher(
-            f'{self.NODE_NAME}/Z_abs_pos',
-            Float,
-            queue_size=1,
-        )
 
         self.__publisher = rospy.Publisher(
-            f'{self.NODE_NAME}/ZMP_ACC',
+            f'{self.NODE_NAME}/zmp_acc',
             Float64MultiArray,
             queue_size=1,
         )
 
         self.__publisher_pos_rel = rospy.Publisher(
-            f'{self.NODE_NAME}/Z_pos_rel',
-            Float,
+            '/z_chest_pos',
+            Position,
             queue_size=1,
         )
 
         # # Topic subscriber:
-        rospy.Subscriber(
-            'MyBase/imu1', #change
-            Imu,
-            self.__IMU_callback,
-        )
 
         rospy.Subscriber(
-            'COF_total/COM_Fin', #change
+            'calc_com_total/com_fin', #change
             Float64MultiArray,
             self.__COM_Total_callback,
         )
@@ -112,6 +102,13 @@ class ZMP_Inv():
             self.__oculus_joystick_callback,
         )
 
+        rospy.Subscriber(
+            '/chest_position',
+            Point,
+            self.__Chest_Pos_callback,
+        )
+
+
     # # Dependency status callbacks:
     # NOTE: each dependency topic should have a callback function, which will
     # set __dependency_status variable.
@@ -122,19 +119,13 @@ class ZMP_Inv():
 
         self.__dependency_status['dependency_node_name'] = message.data
 
-
-
     # # Topic callbacks:
-    def __IMU_callback(self, message):
-        self.acc_x = message.linear_acceleration[0]
-        self.acc_y = message.linear_acceleration[1]
-
     def __COM_Total_callback(self, message):
         self.Mass_pos_fin=[message.data[0], message.data[1], message.data[2]]
         self.Mass_rob=message.data[3]
 
     def __Chest_Pos_callback(self, message):
-        self.Pos_c=message.position
+        self.Pos_c=message.Z
     
     def __oculus_joystick_callback(self, message):
         self.__oculus_joystick = message
@@ -373,21 +364,19 @@ class ZMP_Inv():
         acc_X_current=-a_c*cosa+a_t*sina+target_linear_acc
 
         if acc_X_max_current>acc_X_current:
-            add_pos=steady_pos-self.Pos_c
+            abs_pos=steady_pos
         else:
             e_acc=acc_X_max_current-acc_X_current
-            add_pos=e_acc*P_gain
-  
-        #abs_pos_msg = Float()
-        add_pos_msg = Float()
+            abs_pos=self.Pos_c+e_acc*P_gain
+
+        abs_pos_msg = Position()
         float64_array = Float64MultiArray()
-        #abs_pos_msg.data=abs_pos
-        add_pos_msg.data=add_pos
+        abs_pos_msg.data.position=abs_pos 
+        abs_pos_msg.data.velocity=0
         float64_array.data=[target_linear_acc, target_rot_acc, target_rot_vel, targe_lin_vel]
 
         self.__publisher.publish(float64_array)
-        #self.__publisher_abs_pos.publish(abs_pos_msg)
-        self.__publisher_pos_rel.publish(add_pos_msg)
+        self.__publisher_pos_rel.publish(abs_pos_msg)
     
     def main_loop(self):
         """
@@ -427,7 +416,7 @@ def main():
 
     # # Default node initialization.
     # This name is replaced when a launch file is used.
-    rospy.init_node('ZMP_Inv')
+    rospy.init_node('zmp_inv')
 
     class_instance = ZMP_Inv()
 

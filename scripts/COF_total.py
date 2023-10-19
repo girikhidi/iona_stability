@@ -5,7 +5,7 @@
 import rospy
 
 from std_msgs.msg import (Float64MultiArray, Bool)
-from gopher_ros_clearcore.msg import Position
+from geometry_msgs.msg import Point
 from math import cos
 from math import sin
 import numpy as np
@@ -37,11 +37,11 @@ class Cof_total():
         _yl=-0.139 # y transition of the robot in the frame of a chest
         _zr=0.1925 # z transition of the robot in the frame of a chest
         _zl=0.1925 # z transition of the robot in the frame of a chest
-        _ar=51.2*np.pi/180
-        _al=51.2*np.pi/180
+        _ar=45*np.pi/180
+        _al=45*np.pi/180
         _off_chest=0.0995
 
-        self.NODE_NAME='calc_COM_total'
+        self.NODE_NAME='calc_com_total'
         self.Mass_pos_robot_R=[0.0, 0.0, 0.0]
         self.Mass_pos_robot_L=[0.0, 0.0, 0.0]
         self.Mass_pos_fin=[0.0, 0.0, 0.0]
@@ -77,27 +77,27 @@ class Cof_total():
 
         # # Topic publisher:
         self.__publisher = rospy.Publisher(
-            f'{self.NODE_NAME}/COM_Fin',
+            f'{self.NODE_NAME}/com_fin',
             Float64MultiArray,
             queue_size=1,
         )
 
         # # Topic subscriber:
         rospy.Subscriber(
-            'calc_COM_arm_L/COM_arm_L', #change
+            'calc_com_arm_l/com_arm_l', #change
             Float64MultiArray,
             self.__COM_arm_L_callback,
         )
 
         rospy.Subscriber(
-            'calc_COM_arm_R/COM_arm_R', #change
+            'calc_com_arm_r/com_arm_r', #change
             Float64MultiArray,
             self.__COM_arm_R_callback,
         )
 
         rospy.Subscriber(
-            'gopher_ros_slearcore/chest_position', #change
-            Position,
+            '/chest_position',
+            Point,
             self.__Chest_Pos_callback,
         )
 
@@ -126,7 +126,7 @@ class Cof_total():
         self.Mass_R=data[3]
         
     def __Chest_Pos_callback(self, message):
-        self.Pos_c=message.position
+        self.Pos_c=message.Z
         
 
     # # Private methods:
@@ -324,7 +324,7 @@ def main():
 
     # # Default node initialization.
     # This name is replaced when a launch file is used.
-    rospy.init_node('calc_COM_total')
+    rospy.init_node('calc_com_total')
 
     class_instance = Cof_total()
 

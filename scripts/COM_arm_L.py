@@ -34,9 +34,10 @@ class CoF_arm_calc():
         _mn=0.500
         _ml=0
         _mgrip=0.925
-        self.NODE_NAME='calc_COM_arm_L'
+        self.NODE_NAME='calc_com_arm_l'
         self.Mass_pos_robot_fin=[0.0, 0.0, 0.0, 0.0]
         self.q=[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        self.ROBOTNAME='/my_gen3'
 
         # # Initialization and dependency status topics:
         self.__is_initialized = False
@@ -66,14 +67,14 @@ class CoF_arm_calc():
 
         # # Topic publisher:
         self.__publisher = rospy.Publisher(
-            f'{self.NODE_NAME}/COM_arm_L',
+            f'{self.NODE_NAME}/com_arm_l',
             Float64MultiArray,
             queue_size=1,
         )
 
         # # Topic subscriber:
         rospy.Subscriber(
-            'MyRobotL/joint_state', #change
+            f'{self.ROBOTNAME}/base_feedback/joint_state', #change
             JointState,
             self.__COF_callback,
         )
@@ -287,7 +288,7 @@ def main():
 
     # # Default node initialization.
     # This name is replaced when a launch file is used.
-    rospy.init_node('calc_COM_arm_L')
+    rospy.init_node('calc_com_arm_l')
 
     class_instance = CoF_arm_calc()
 

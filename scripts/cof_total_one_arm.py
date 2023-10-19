@@ -5,13 +5,13 @@
 import rospy
 
 from std_msgs.msg import (Float64MultiArray, Bool)
-from sensor_msgs.msg import JointState
+from geometry_msgs.msg import Point
 from math import cos
 from math import sin
 import numpy as np
 
 
-class CoF_arm_calc():
+class Cof_total():
     """
     
     """
@@ -24,20 +24,28 @@ class CoF_arm_calc():
         """
 
         # # Private constants:
-        _mb=1.697
-        _m1=1.377
-        _m2=1.1636
-        _m3=1.1636
-        _m4=0.930
-        _m5=0.678
-        _m6=0.678
-        _mn=0.500
-        _ml=0
-        _mgrip=0.925
-        self.NODE_NAME='calc_com_arm_r'
-        self.Mass_pos_robot_fin=[0.0, 0.0, 0.0, 0.0]
-        self.q=[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-        self.ROBOTNAME='/my_gen3'
+        _m_mobile=68
+        _m_stand=39.107
+        _m_base=_m_mobile+_m_stand
+        _m_chest=17.316
+        _hb=0.359
+        _hc=0.386 # height of the origin of the cheat coordinate system
+        _hs=0.56219 # height of center of mass of a stand
+        _xr=0.1375 # x transition of the robot in the frame of a chest
+        _xl=0.1375 # x transition of the robot in the frame of a chest
+        _yr=0.139 # y transition of the robot in the frame of a chest
+        _yl=-0.139 # y transition of the robot in the frame of a chest
+        _zr=0.1925 # z transition of the robot in the frame of a chest
+        _zl=0.1925 # z transition of the robot in the frame of a chest
+        _ar=51.2*np.pi/180
+        _al=51.2*np.pi/180
+        _off_chest=0.0995
+
+        self.NODE_NAME='calc_com_total'
+        self.Mass_pos_robot_R=[0.0, 0.0, 0.0]
+        self.Mass_pos_fin=[0.0, 0.0, 0.0]
+        self.Mass_L=0
+        self.Pos_c=0
 
         # # Initialization and dependency status topics:
         self.__is_initialized = False
@@ -67,17 +75,25 @@ class CoF_arm_calc():
 
         # # Topic publisher:
         self.__publisher = rospy.Publisher(
-            f'{self.NODE_NAME}/com_arm_r',
+            f'{self.NODE_NAME}/com_fin',
             Float64MultiArray,
             queue_size=1,
         )
 
         # # Topic subscriber:
+
         rospy.Subscriber(
-            f'{self.ROBOTNAME}/base_feedback/joint_state', #change
-            JointState,
-            self.__COF_callback,
+            'calc_com_arm_r/com_arm_r', #change
+            Float64MultiArray,
+            self.__COM_arm_R_callback,
         )
+
+        rospy.Subscriber(
+            '/chest_position',
+            Point,
+            self.__Chest_Pos_callback,
+        )
+
 
     # # Dependency status callbacks:
     # NOTE: each dependency topic should have a callback function, which will
@@ -89,9 +105,19 @@ class CoF_arm_calc():
 
         self.__dependency_status['dependency_node_name'] = message.data
 
+
+
     # # Topic callbacks:
-    def __COF_callback(self, message):
-        self.q = message.position
+
+
+    def __COM_arm_R_callback(self, message):
+        data = message.data
+        self.Mass_pos_robot_R=[data[0], data[1], data[2]]
+        self.Mass_R=data[3]
+        
+    def __Chest_Pos_callback(self, message):
+        self.Pos_c=message.Z
+        
 
     # # Private methods:
     def __check_initialization(self):
@@ -175,95 +201,74 @@ class CoF_arm_calc():
         # NOTE: Add code (function calls), which has to be executed once the
         # node was successfully initialized.
 
-        mb=CoF_arm_calc._mb
-        m1=CoF_arm_calc._m1
-        m2=CoF_arm_calc._m2
-        m3=CoF_arm_calc._m3
-        m4=CoF_arm_calc._m4
-        m5=CoF_arm_calc._m5
-        m6=CoF_arm_calc._m6
-        mn=CoF_arm_calc._mn
-        ml=CoF_arm_calc._ml
-        mgrip=CoF_arm_calc._mgrip
-        q=self.q
+        m_mobile=Cof_total._m_mobile
+        m_stand=Cof_total._m_stand
+        m_base=Cof_total._m_base
+        m_chest=Cof_total._m_chest
+        hb=Cof_total._hb
+        hc=Cof_total._hc
+        hs=Cof_total._hs
+        xr=Cof_total._xr
+        xl=Cof_total._xl
+        yr=Cof_total._yr
+        yl=Cof_total._yl
+        zr=Cof_total._zr
+        zl=Cof_total._zl
+        ar=Cof_total._ar
+        al=Cof_total._al
+        off_chest=Cof_total._off_chest
+
+        Mass_pos_robotR=np.array([[self.Mass_pos_robot_R[0]], [self.Mass_pos_robot_R[1]], [self.Mass_pos_robot_R[2]], [1]])
+        Mass_pos_mob=np.array([[0.0024], [0], [0.180], [1]]);
+        Mass_pos_stand=np.array([[-0.06945], [-0.0016], [hb+hs], [1]])
+        Xb=(Mass_pos_mob[0]*m_mobile+Mass_pos_stand[0]*m_stand)/(m_base)
+        Yb=(Mass_pos_mob[1]*m_mobile+Mass_pos_stand[1]*m_stand)/(m_base)
+        Zb=(Mass_pos_mob[2]*m_mobile+Mass_pos_stand[2]*m_stand)/(m_base)
+        Mass_pos_base=np.array([[Xb[0]], [Yb[0]], [Zb[0]], [1]])
         
-        T01=np.array([[cos(q[0]), -sin(q[0]), 0, 0],
-        [-sin(q[0]), -cos(q[0]), 0, 0],
-        [0, 0, -1, 0.1564],
+        T01=np.array([[1, 0, 0, -off_chest],
+        [0, 1, 0, 0],
+        [0, 0, 1, (hb+hc+self.Pos_c)],
         [0, 0, 0, 1]])
-        T12=np.array([[cos(q[1]), -sin(q[1]), 0, 0],
-            [0, 0, -1, 0.0054],
-            [sin(q[1]), cos(q[1]), 0, -0.1284],
-            [0, 0, 0, 1]])
-        T23=np.array([[cos(q[2]), -sin(q[2]), 0, 0],
-            [0, 0, 1, -0.2104],
-            [-sin(q[2]), -cos(q[2]), 0, -0.0064],
-            [0, 0, 0, 1]])
-        T34=np.array([[cos(q[3]), -sin(q[3]), 0, 0],
-            [0, 0, -1, -0.0064],
-            [sin(q[3]), cos(q[3]), 0, -0.2104],
-            [0, 0, 0, 1]])
-        T45=np.array([[cos(q[4]), -sin(q[4]), 0, 0],
-            [0, 0, 1, -0.2084],
-            [-sin(q[4]), -cos(q[4]), 0, -0.0064],
-            [0, 0, 0, 1]])
-        T56=np.array([[cos(q[5]), -sin(q[5]), 0, 0],
-            [0, 0, -1, 0],
-            [sin(q[5]), cos(q[5]), 0, -0.1059],
-            [0, 0, 0, 1]])
-        T67=np.array([[cos(q[6]), -sin(q[6]), 0, 0],
-            [0, 0, 1, -0.1059],
-            [-sin(q[6]), -cos(q[6]), 0, 0],
-            [0, 0, 0, 1]])
-        T7L=np.array([[1, 0, 0, 0],
-            [0, -1, 0, 0],
-            [0, 0, -1, -0.0615],
-            [0, 0, 0, 1]])
-        
-        gripper_com=np.array([0, 0, 0.058])
-        load_com=np.array([0, 0, 0.08765]) 
+        Mass_pos_chest_1=np.array([[0.08581], [0], [0.172112], [1]])
+        Mass_pos_chest=np.dot(T01, Mass_pos_chest_1)
 
-        Mass_posb=np.array([-0.000648, -0.000166, 0.084487])
-        Mass_pos1_1=np.array([-0.000023, -0.010364, -0.073360, 1])
-        Mass_pos1=np.dot(T01, Mass_pos1_1.transpose())
-        Mass_pos2_1=np.array([-0.000044, -0.099580, -0.013278, 1])
-        Mass_pos2=np.dot(np.dot(T01,T12),Mass_pos2_1.transpose())
-        Mass_pos3_1=np.array([-0.000044, -0.006641, -0.117892, 1])
-        Mass_pos3=np.dot(np.dot(np.dot(T01,T12),T23),Mass_pos3_1.transpose())
-        Mass_pos4_1=np.array([-0.000018, -0.075478, -0.015006, 1])
-        Mass_pos4=np.dot(np.dot(np.dot(np.dot(T01,T12),T23),T34),Mass_pos4_1.transpose())
-        Mass_pos5_1=np.array([0.000001, -0.009432, -0.063883, 1])
-        Mass_pos5=np.dot(np.dot(np.dot(np.dot(np.dot(T01,T12),T23),T34),T45),Mass_pos5_1.transpose())
-        Mass_pos6_1=np.array([0.000001, -0.045483, -0.009650, 1])
-        Mass_pos6=np.dot(np.dot(np.dot(np.dot(np.dot(np.dot(T01,T12),T23),T34),T45),T56),Mass_pos6_1.transpose())
-        Mass_posN_1=np.array([-0.000281, -0.011402, -0.029798, 1])
-        Mass_posN=np.dot(np.dot(np.dot(np.dot(np.dot(np.dot(np.dot(T01,T12),T23),T34),T45),T56),T67),Mass_posN_1.transpose())
+        RotZR=np.array([[0,1,0,0],
+            [-1,0,0,0],
+            [0,0,1,0],
+            [0,0,0,1]])
+        TransXR=np.array([[1,0,0,xr],
+            [0,1,0,0],
+            [0,0,1,0],
+            [0,0,0,1]])
+        TransYR=np.array([[1,0,0,0],
+            [0,1,0,yr],
+            [0,0,1,0],
+            [0,0,0,1]])
+        TransZR=np.array([[1,0,0,0],
+            [0,1,0,0],
+            [0,0,1,zr],
+            [0,0,0,1]])
+        RotYR=np.array([[cos(ar), 0, sin(ar), 0],
+            [0, 1,0,0],
+            [-sin(ar), 0, cos(ar), 0],
+            [0,0,0,1]])
 
-        Pos_L=np.dot(np.dot(np.dot(np.dot(np.dot(np.dot(np.dot(T01,T12),T23),T34),T45),T56),T67),T7L)
+        Mass_pos_robotR=np.dot(np.dot(np.dot(np.dot(np.dot(np.dot(T01,RotZR),TransXR),TransYR),TransZR),RotYR),Mass_pos_robotR)
 
-        ml_f=ml+mgrip
-        Mass_posL=np.array([0, 0, (gripper_com[2]*mgrip+load_com[2]*ml)/ml_f, 1])
-        Mass_posL=np.dot(Pos_L, Mass_posL.transpose())
-
-
-
-        X=(Mass_posb[0]*mb+Mass_pos1[0]*m1+Mass_pos2[0]*m2+Mass_pos3[0]*m3+Mass_pos4[0]*m4+
-        Mass_pos5[0]*m5+Mass_pos6[0]*m6+Mass_posN[0]*mn+Mass_posL[0]*ml_f)/(mb+m1+m2+m3+m4+m5+m6+mn+ml_f)
-        
-        Y=(Mass_posb[1]*mb+Mass_pos1[1]*m1+Mass_pos2[1]*m2+Mass_pos3[1]*m3+Mass_pos4[1]*m4+
-        Mass_pos5[1]*m5+Mass_pos6[1]*m6+Mass_posN[1]*mn+Mass_posL[1]*ml_f)/(mb+m1+m2+m3+m4+m5+m6+mn+ml_f)
-        
-        Z=(Mass_posb[2]*mb+Mass_pos1[2]*m1+Mass_pos2[2]*m2+Mass_pos3[2]*m3+Mass_pos4[2]*m4+
-        Mass_pos5[2]*m5+Mass_pos6[2]*m6+Mass_posN[2]*mn+Mass_posL[2]*ml_f)/(mb+m1+m2+m3+m4+m5+m6+mn+ml_f)
-        
-        M_total=mb+m1+m2+m3+m4+m5+m6+mn+ml_f
-        self.Mass_pos_robot_fin=[X,Y,Z, M_total]
-
+        Xf=(Mass_pos_base[0]*m_base+Mass_pos_chest[0]*m_chest+
+        Mass_pos_robotR[0]*self.Mass_R)/(self.Mass_R+m_chest+m_base)
+        Yf=(Mass_pos_base[1]*m_base+Mass_pos_chest[1]*m_chest+
+        Mass_pos_robotR[1]*self.Mass_R)/(self.Mass_R+m_chest+m_base)
+        Zf=(Mass_pos_base[2]*m_base+Mass_pos_chest[2]*m_chest+
+        Mass_pos_robotR[2]*self.Mass_R)/(self.Mass_R+m_chest+m_base)
+       
+        M_total=self.Mass_R+m_chest+m_base
+        Mass_pos_fin=[Xf[0], Yf[0], Zf[0], M_total]
         float64_array = Float64MultiArray()
-        float64_array.data=self.Mass_pos_robot_fin
-        self.__publisher.publish(float64_array)
-   
+        float64_array.data=Mass_pos_fin
 
+        self.__publisher.publish(float64_array)
 
     def node_shutdown(self):
         """
@@ -286,9 +291,9 @@ def main():
 
     # # Default node initialization.
     # This name is replaced when a launch file is used.
-    rospy.init_node('calc_com_arm_r')
+    rospy.init_node('calc_com_total')
 
-    class_instance = CoF_arm_calc()
+    class_instance = Cof_total()
 
     rospy.on_shutdown(class_instance.node_shutdown)
 
