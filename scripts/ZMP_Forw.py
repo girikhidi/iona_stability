@@ -211,11 +211,19 @@ class ZMP_Forw():
                 [-1.0, 1.0],
                 [-self.MAX_LINEAR_SPEED, self.MAX_LINEAR_SPEED],
             )
-            target_linear_acc = np.interp(
-                round(updated_joystick[1], 4),
-                [-1, -0.01, 0.01, 1.0],
-                [-0.8*acc_X_max, -0.08*acc_X_max, 0.08*acc_X_max, 0.8*acc_X_max],
-            )
+            if self.__oculus_joystick.position_y >=0.01:
+                target_linear_acc = np.interp(
+                    round(updated_joystick[1], 4),
+                    [0.01, 1.0],
+                    [0.08*acc_X_max, 0.8*acc_X_max],
+                )
+            elif self.__oculus_joystick.position_y <=-0.01:
+                target_linear_acc = np.interp(
+                    round(updated_joystick[1], 4),
+                    [-1, -0.01],
+                    [-0.8*acc_X_max, -0.08*acc_X_max],
+                )
+
             rot_vel, rot_acc=self.acc_calc(target_linear_acc)
             target_rot_vel=0
             target_rot_acc=rot_acc
@@ -226,19 +234,32 @@ class ZMP_Forw():
                 [-1.0, 1.0],
                 [-self.MAX_LINEAR_SPEED, self.MAX_LINEAR_SPEED],
             )
-            target_linear_acc = np.interp(
-                round(updated_joystick[1], 4),
-                [-1, -0.01, 0.01, 1.0],
-                [-0.8*acc_X_max, -0.8*acc_X_max, 0.08*acc_X_max, 0.8*acc_X_max],
-            )
+            if self.__oculus_joystick.position_y >=0.01:
+                target_linear_acc = np.interp(
+                    round(updated_joystick[1], 4),
+                    [0.01, 1.0],
+                    [0.08*acc_X_max, 0.8*acc_X_max],
+                )
+            elif self.__oculus_joystick.position_y <=-0.01:
+                target_linear_acc = np.interp(
+                    round(updated_joystick[1], 4),
+                    [-1, -0.01],
+                    [-0.8*acc_X_max, -0.08*acc_X_max],
+                )
             rot_vel, rot_acc=self.acc_calc(target_linear_acc)
 
-            target_rot_acc=np.interp(
-                round(updated_joystick[0], 4),
-                [-1, -0.01, 0.01, 1.0],
-                [-0.8*acc_X_max, -0.8*acc_X_max, 0.08*acc_X_max, 0.8*acc_X_max],
-            )
-            
+            if self.__oculus_joystick.position_x >= 0.01:
+                target_rot_acc=np.interp(
+                    round(updated_joystick[0], 4),
+                    [ 0.01, 1.0],
+                    [0.01*rot_acc, rot_acc],
+                )
+            elif self.__oculus_joystick.position_x <=-0.01:
+                target_rot_acc=np.interp(
+                        round(updated_joystick[0], 4),
+                        [ -1.0, -0.01],
+                        [-rot_acc, -0.01*rot_acc],
+                    )
             target_rot_vel = np.interp(
                 round(updated_joystick[0], 4),
                 [-1.0, 1.0],
@@ -251,11 +272,18 @@ class ZMP_Forw():
             target_linear_acc= 0.8*acc_X_max
             rot_vel, rot_acc=self.acc_calc(0)
 
-            target_rot_acc=np.interp(
-                round(updated_joystick[0], 4),
-                [-1, -0.01, 0.01, 1.0],
-                [-rot_acc, -0.01*rot_acc, 0.01*rot_acc, rot_acc],
-            )
+            if self.__oculus_joystick.position_x >= 0.01:
+                target_rot_acc=np.interp(
+                    round(updated_joystick[0], 4),
+                    [ 0.01, 1.0],
+                    [0.01*rot_acc, rot_acc],
+                )
+            elif self.__oculus_joystick.position_x <=-0.01:
+                target_rot_acc=np.interp(
+                        round(updated_joystick[0], 4),
+                        [ -1.0, -0.01],
+                        [-rot_acc, -0.01*rot_acc],
+                    )
             
             target_rot_vel = np.interp(
                 round(updated_joystick[0], 4),
