@@ -4,14 +4,12 @@
 """
 import rospy
 
-from std_msgs.msg import (Float64MultiArray, Bool, Float)
+from std_msgs.msg import (Float64MultiArray, Bool)
 from geometry_msgs.msg import Point
-import math 
-from  sensor_msgs.msg import (Imu)
+import math
 from gopher_ros_clearcore.msg import Position
 from oculus_ros.msg import ControllerJoystick
 import numpy as np
-
 
 
 class ZMP_Inv():
@@ -19,26 +17,24 @@ class ZMP_Inv():
     
     """
 
-    def __init__(
-        self      
-    ):
+    def __init__(self):
         """
         
         """
 
         # # Private constants:
-        self.NODE_NAME='zmp_inv'
-        self.acc_x=0
-        self.acc_y=0
-        self.Mass_pos_fin=[0,0,0]
-        self.Mass_rob=0
-        self.Pos_c=0
-        self.flag=0
-        self.prev_pos=0
-        self.counter=0
-        self.CONTROLLER_SIDE='left'
-        self.MAX_LINEAR_SPEED=0.5
-        self.steady_pos=self.Pos_c
+        self.NODE_NAME = 'zmp_inv'
+        self.acc_x = 0
+        self.acc_y = 0
+        self.Mass_pos_fin = [0, 0, 0]
+        self.Mass_rob = 0
+        self.Pos_c = 0
+        self.flag = 0
+        self.prev_pos = 0
+        self.counter = 0
+        self.CONTROLLER_SIDE = 'left'
+        self.MAX_LINEAR_SPEED = 0.5
+        self.steady_pos = self.Pos_c
         self.__oculus_joystick = ControllerJoystick()
 
         # # Initialization and dependency status topics:
@@ -53,22 +49,22 @@ class ZMP_Inv():
 
         # NOTE: Specify dependency initial False initial status.
         self.__dependency_status = {
-            'dependency_node_name': False,
+            # 'dependency_node_name': False,
         }
 
         # NOTE: Specify dependency is_initialized topic (or any other topic,
         # which will be available when the dependency node is running properly).
         self.__dependency_status_topics = {
-            'dependency_node_name':
-                rospy.Subscriber(
-                    f'/dependency_node_name/is_initialized',
-                    Bool,
-                    self.__dependency_name_callback,
-                ),
+            # 'dependency_node_name':
+            #     rospy.Subscriber(
+            #         f'/dependency_node_name/is_initialized',
+            #         Bool,
+            #         self.__dependency_name_callback,
+            #     ),
         }
 
         # # Topic publisher:
-        #Change 
+        #Change
 
         self.__publisher = rospy.Publisher(
             f'{self.NODE_NAME}/zmp_acc',
@@ -85,13 +81,13 @@ class ZMP_Inv():
         # # Topic subscriber:
 
         rospy.Subscriber(
-            'calc_com_total/com_fin', #change
+            'calc_com_total/com_fin',  #change
             Float64MultiArray,
             self.__COM_Total_callback,
         )
 
         rospy.Subscriber(
-            'gopher_ros_slearcore/chest_position', #change
+            'gopher_ros_slearcore/chest_position',  #change
             Position,
             self.__Chest_Pos_callback,
         )
@@ -108,7 +104,6 @@ class ZMP_Inv():
             self.__Chest_Pos_callback,
         )
 
-
     # # Dependency status callbacks:
     # NOTE: each dependency topic should have a callback function, which will
     # set __dependency_status variable.
@@ -121,15 +116,14 @@ class ZMP_Inv():
 
     # # Topic callbacks:
     def __COM_Total_callback(self, message):
-        self.Mass_pos_fin=[message.data[0], message.data[1], message.data[2]]
-        self.Mass_rob=message.data[3]
+        self.Mass_pos_fin = [message.data[0], message.data[1], message.data[2]]
+        self.Mass_rob = message.data[3]
 
     def __Chest_Pos_callback(self, message):
-        self.Pos_c=message.Z
-    
+        self.Pos_c = message.Z
+
     def __oculus_joystick_callback(self, message):
         self.__oculus_joystick = message
- 
 
     # # Private methods:
     def __check_initialization(self):
@@ -246,166 +240,189 @@ class ZMP_Inv():
             updated_joystick[1] = 0.0
 
         return updated_joystick
-    
+
     def acc_calc(self, target_linear_acc):
 
-        R=math.sqrt(self.Mass_pos_fin[0]*self.Mass_pos_fin[0]+self.Mass_pos_fin[1]*self.Mass_pos_fin[1])
-        e=2.7
-        XlimLow=-0.221/e
-        YlimLow=-0.221/e
-        cosa=self.Mass_pos_fin[0]/R
-        sina=self.Mass_pos_fin[1]/R
-        tga=self.Mass_pos_fin[1]/self.Mass_pos_fin[0]
+        R = math.sqrt(
+            self.Mass_pos_fin[0] * self.Mass_pos_fin[0]
+            + self.Mass_pos_fin[1] * self.Mass_pos_fin[1]
+        )
+        e = 2.7
+        XlimLow = -0.221 / e
+        YlimLow = -0.221 / e
+        cosa = self.Mass_pos_fin[0] / R
+        sina = self.Mass_pos_fin[1] / R
+        tga = self.Mass_pos_fin[1] / self.Mass_pos_fin[0]
 
-        g=9.81
-        acc_X_max_current=(XlimLow*self.Mass_rob*g-self.Mass_rob*self.Mass_pos_fin[0])/(-self.Mass_rob*self.Mass_pos_fin[2])
-        acc_Y_max_current=(YlimLow*self.Mass_rob*g-self.Mass_rob*self.Mass_pos_fin[1])/(-self.Mass_rob*self.Mass_pos_fin[2])
-        a_c_max=(acc_X_max_current-tga*acc_Y_max_current-target_linear_acc)/(-cosa-tga*sina)
-        a_t_max=(acc_Y_max_current-sina*a_c_max)/(cosa)
-        rot_vel=math.sqrt(a_c_max/R)
-        rot_acc=a_t_max/R
+        g = 9.81
+        acc_X_max_current = (
+            XlimLow * self.Mass_rob * g - self.Mass_rob * self.Mass_pos_fin[0]
+        ) / (-self.Mass_rob * self.Mass_pos_fin[2])
+        acc_Y_max_current = (
+            YlimLow * self.Mass_rob * g - self.Mass_rob * self.Mass_pos_fin[1]
+        ) / (-self.Mass_rob * self.Mass_pos_fin[2])
+        a_c_max = (
+            acc_X_max_current - tga * acc_Y_max_current - target_linear_acc
+        ) / (-cosa - tga * sina)
+        a_t_max = (acc_Y_max_current - sina * a_c_max) / (cosa)
+        rot_vel = math.sqrt(a_c_max / R)
+        rot_acc = a_t_max / R
 
         return rot_vel, rot_acc
-    
+
     def target_val(self):
-        R=math.sqrt(self.Mass_pos_fin[0]*self.Mass_pos_fin[0]+self.Mass_pos_fin[1]*self.Mass_pos_fin[1])
-        e=2.7
-        XlimLow=-0.221/e
-        g=9.81
-        P_gain=1
+        R = math.sqrt(
+            self.Mass_pos_fin[0] * self.Mass_pos_fin[0]
+            + self.Mass_pos_fin[1] * self.Mass_pos_fin[1]
+        )
+        e = 2.7
+        XlimLow = -0.221 / e
+        g = 9.81
+        P_gain = 1
 
-        cosa=self.Mass_pos_fin[0]/R
-        sina=self.Mass_pos_fin[1]/R
+        cosa = self.Mass_pos_fin[0] / R
+        sina = self.Mass_pos_fin[1] / R
 
-        hb=0.359
-        hc=0.386
+        hb = 0.359
+        hc = 0.386
 
-        acc_X_max=(XlimLow*self.Mass_rob*g-self.Mass_rob*self.Mass_pos_fin[0])/(-self.Mass_rob*(hb+hc))
-        
+        acc_X_max = (
+            XlimLow * self.Mass_rob * g - self.Mass_rob * self.Mass_pos_fin[0]
+        ) / (-self.Mass_rob * (hb + hc))
+
         updated_joystick = self.__check_dead_zones()
 
-        if abs(self.__oculus_joystick.position_y) >= 0.01 and abs(self.__oculus_joystick.position_x) < 0.01:  # Noisy joystick.
+        if abs(self.__oculus_joystick.position_y) >= 0.01 and abs(
+            self.__oculus_joystick.position_x
+        ) < 0.01:  # Noisy joystick.
             targe_lin_vel = np.interp(
                 round(updated_joystick[1], 4),
                 [-1.0, 1.0],
                 [-self.MAX_LINEAR_SPEED, self.MAX_LINEAR_SPEED],
             )
-            if self.__oculus_joystick.position_y >=0.01:
+            if self.__oculus_joystick.position_y >= 0.01:
                 target_linear_acc = np.interp(
                     round(updated_joystick[1], 4),
                     [0.01, 1.0],
-                    [0.08*acc_X_max, 0.8*acc_X_max],
+                    [0.08 * acc_X_max, 0.8 * acc_X_max],
                 )
-            elif self.__oculus_joystick.position_y <=-0.01:
+            elif self.__oculus_joystick.position_y <= -0.01:
                 target_linear_acc = np.interp(
                     round(updated_joystick[1], 4),
                     [-1, -0.01],
-                    [-0.8*acc_X_max, -0.08*acc_X_max],
+                    [-0.8 * acc_X_max, -0.08 * acc_X_max],
                 )
-            counter=0
-            rot_vel, rot_acc=self.acc_calc(target_linear_acc)
-            target_rot_vel=0
-            target_rot_acc=rot_acc
+            counter = 0
+            rot_vel, rot_acc = self.acc_calc(target_linear_acc)
+            target_rot_vel = 0
+            target_rot_acc = rot_acc
 
-        elif abs(self.__oculus_joystick.position_y) >= 0.01 and abs(self.__oculus_joystick.position_x) >= 0.01:
+        elif abs(self.__oculus_joystick.position_y
+                ) >= 0.01 and abs(self.__oculus_joystick.position_x) >= 0.01:
             targe_lin_vel = np.interp(
                 round(updated_joystick[1], 4),
                 [-1.0, 1.0],
                 [-self.MAX_LINEAR_SPEED, self.MAX_LINEAR_SPEED],
             )
-            if self.__oculus_joystick.position_y >=0.01:
+            if self.__oculus_joystick.position_y >= 0.01:
                 target_linear_acc = np.interp(
                     round(updated_joystick[1], 4),
                     [0.01, 1.0],
-                    [0.08*acc_X_max, 0.8*acc_X_max],
+                    [0.08 * acc_X_max, 0.8 * acc_X_max],
                 )
-            elif self.__oculus_joystick.position_y <=-0.01:
+            elif self.__oculus_joystick.position_y <= -0.01:
                 target_linear_acc = np.interp(
                     round(updated_joystick[1], 4),
                     [-1, -0.01],
-                    [-0.8*acc_X_max, -0.08*acc_X_max],
+                    [-0.8 * acc_X_max, -0.08 * acc_X_max],
                 )
-            
-            counter=0
-            rot_vel, rot_acc=self.acc_calc(target_linear_acc)
+
+            counter = 0
+            rot_vel, rot_acc = self.acc_calc(target_linear_acc)
 
             if self.__oculus_joystick.position_x >= 0.01:
-                target_rot_acc=np.interp(
+                target_rot_acc = np.interp(
                     round(updated_joystick[0], 4),
-                    [ 0.01, 1.0],
-                    [0.01*rot_acc, rot_acc],
+                    [0.01, 1.0],
+                    [0.01 * rot_acc, rot_acc],
                 )
-            elif self.__oculus_joystick.position_x <=-0.01:
-                target_rot_acc=np.interp(
-                        round(updated_joystick[0], 4),
-                        [ -1.0, -0.01],
-                        [-rot_acc, -0.01*rot_acc],
-                    )
-            
+            elif self.__oculus_joystick.position_x <= -0.01:
+                target_rot_acc = np.interp(
+                    round(updated_joystick[0], 4),
+                    [-1.0, -0.01],
+                    [-rot_acc, -0.01 * rot_acc],
+                )
+
             target_rot_vel = np.interp(
                 round(updated_joystick[0], 4),
                 [-1.0, 1.0],
                 [-rot_vel, rot_vel],
             )
 
-        elif abs(self.__oculus_joystick.position_y) < 0.01 and abs(self.__oculus_joystick.position_x) >= 0.01:
-            
-            targe_lin_vel = 0 
-            target_linear_acc= 0.8*acc_X_max
+        elif abs(self.__oculus_joystick.position_y
+                ) < 0.01 and abs(self.__oculus_joystick.position_x) >= 0.01:
 
-            counter=0
-            rot_vel, rot_acc=self.acc_calc(0)
+            targe_lin_vel = 0
+            target_linear_acc = 0.8 * acc_X_max
+
+            counter = 0
+            rot_vel, rot_acc = self.acc_calc(0)
 
             if self.__oculus_joystick.position_x >= 0.01:
-                target_rot_acc=np.interp(
+                target_rot_acc = np.interp(
                     round(updated_joystick[0], 4),
-                    [ 0.01, 1.0],
-                    [0.01*rot_acc, rot_acc],
+                    [0.01, 1.0],
+                    [0.01 * rot_acc, rot_acc],
                 )
-            elif self.__oculus_joystick.position_x <=-0.01:
-                target_rot_acc=np.interp(
-                        round(updated_joystick[0], 4),
-                        [ -1.0, -0.01],
-                        [-rot_acc, -0.01*rot_acc],
-                    )
-            
+            elif self.__oculus_joystick.position_x <= -0.01:
+                target_rot_acc = np.interp(
+                    round(updated_joystick[0], 4),
+                    [-1.0, -0.01],
+                    [-rot_acc, -0.01 * rot_acc],
+                )
+
             target_rot_vel = np.interp(
                 round(updated_joystick[0], 4),
                 [-1.0, 1.0],
                 [-rot_vel, rot_vel],
             )
 
-        elif abs(self.__oculus_joystick.position_y) < 0.01 and abs(self.__oculus_joystick.position_x) < 0.01:
-            targe_lin_vel=0
-            target_linear_acc=0.8*acc_X_max
-            rot_vel, rot_acc=self.acc_calc(0)
-            target_rot_vel=0
-            target_rot_acc=rot_acc
-            counter=counter+1
-            if counter >50:
-                steady_pos=self.Pos_c
+        elif abs(self.__oculus_joystick.position_y
+                ) < 0.01 and abs(self.__oculus_joystick.position_x) < 0.01:
+            targe_lin_vel = 0
+            target_linear_acc = 0.8 * acc_X_max
+            rot_vel, rot_acc = self.acc_calc(0)
+            target_rot_vel = 0
+            target_rot_acc = rot_acc
+            counter = counter + 1
+            if counter > 50:
+                steady_pos = self.Pos_c
 
-        acc_X_max_current=(XlimLow*self.Mass_rob*g-self.Mass_rob*self.Mass_pos_fin[0])/(-self.Mass_rob*self.Mass_pos_fin[2])
-        
-        a_c=R*target_rot_vel*target_rot_vel
-        a_t=R*target_rot_acc
-        acc_X_current=-a_c*cosa+a_t*sina+target_linear_acc
+        acc_X_max_current = (
+            XlimLow * self.Mass_rob * g - self.Mass_rob * self.Mass_pos_fin[0]
+        ) / (-self.Mass_rob * self.Mass_pos_fin[2])
 
-        if acc_X_max_current>acc_X_current:
-            abs_pos=steady_pos
+        a_c = R * target_rot_vel * target_rot_vel
+        a_t = R * target_rot_acc
+        acc_X_current = -a_c * cosa + a_t * sina + target_linear_acc
+
+        if acc_X_max_current > acc_X_current:
+            abs_pos = steady_pos
         else:
-            e_acc=acc_X_max_current-acc_X_current
-            abs_pos=self.Pos_c+e_acc*P_gain
+            e_acc = acc_X_max_current - acc_X_current
+            abs_pos = self.Pos_c + e_acc * P_gain
 
         abs_pos_msg = Position()
         float64_array = Float64MultiArray()
-        abs_pos_msg.data.position=abs_pos 
-        abs_pos_msg.data.velocity=0
-        float64_array.data=[target_linear_acc, target_rot_acc, target_rot_vel, targe_lin_vel]
+        abs_pos_msg.data.position = abs_pos
+        abs_pos_msg.data.velocity = 0.5
+        float64_array.data = [
+            target_linear_acc, target_rot_acc, target_rot_vel, targe_lin_vel
+        ]
 
         self.__publisher.publish(float64_array)
         self.__publisher_pos_rel.publish(abs_pos_msg)
-    
+
     def main_loop(self):
         """
         
@@ -419,10 +436,7 @@ class ZMP_Inv():
         # NOTE: Add code (function calls), which has to be executed once the
         # node was successfully initialized.
         self.target_val()
-        
 
-
-        
     def node_shutdown(self):
         """
         

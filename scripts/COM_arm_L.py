@@ -24,16 +24,6 @@ class CoF_arm_calc():
         """
 
         # # Private constants:
-        _mb=1.697
-        _m1=1.377
-        _m2=1.1636
-        _m3=1.1636
-        _m4=0.930
-        _m5=0.678
-        _m6=0.678
-        _mn=0.500
-        _ml=0
-        _mgrip=0.925
         self.NODE_NAME='calc_com_arm_l'
         self.Mass_pos_robot_fin=[0.0, 0.0, 0.0, 0.0]
         self.q=[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
@@ -163,29 +153,17 @@ class CoF_arm_calc():
         self.__node_is_initialized.publish(self.__is_initialized)
 
     # # Public methods:
-    def main_loop(self):
-        """
-        
-        """
-
-        self.__check_initialization()
-
-        if not self.__is_initialized:
-            return
-
-        # NOTE: Add code (function calls), which has to be executed once the
-        # node was successfully initialized.
-
-        mb=CoF_arm_calc._mb
-        m1=CoF_arm_calc._m1
-        m2=CoF_arm_calc._m2
-        m3=CoF_arm_calc._m3
-        m4=CoF_arm_calc._m4
-        m5=CoF_arm_calc._m5
-        m6=CoF_arm_calc._m6
-        mn=CoF_arm_calc._mn
-        ml=CoF_arm_calc._ml
-        mgrip=CoF_arm_calc._mgrip
+    def calc_com(self):
+        mb=1.697
+        m1=1.377
+        m2=1.1636
+        m3=1.1636
+        m4=0.930
+        m5=0.678
+        m6=0.678
+        mn=0.500
+        ml=0
+        mgrip=0.925
         q=self.q
         
         T01=np.array([[cos(q[0]), -sin(q[0]), 0, 0],
@@ -265,6 +243,21 @@ class CoF_arm_calc():
         float64_array.data=self.Mass_pos_robot_fin
         
         self.__publisher.publish(float64_array)
+
+    def main_loop(self):
+        """
+        
+        """
+
+        self.__check_initialization()
+
+        if not self.__is_initialized:
+            return
+
+        # NOTE: Add code (function calls), which has to be executed once the
+        # node was successfully initialized.
+        self.calc_com()
+        
         
 
     def node_shutdown(self):

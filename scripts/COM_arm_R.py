@@ -16,28 +16,17 @@ class CoF_arm_calc():
     
     """
 
-    def __init__(
-        self 
-    ):
+    def __init__(self):
         """
         
         """
 
         # # Private constants:
-        _mb=1.697
-        _m1=1.377
-        _m2=1.1636
-        _m3=1.1636
-        _m4=0.930
-        _m5=0.678
-        _m6=0.678
-        _mn=0.500
-        _ml=0
-        _mgrip=0.925
-        self.NODE_NAME='calc_com_arm_r'
-        self.Mass_pos_robot_fin=[0.0, 0.0, 0.0, 0.0]
-        self.q=[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-        self.ROBOTNAME='/my_gen3'
+
+        self.NODE_NAME = 'calc_com_arm_r'
+        self.Mass_pos_robot_fin = [0.0, 0.0, 0.0, 0.0]
+        self.q = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        self.ROBOTNAME = '/my_gen3'
 
         # # Initialization and dependency status topics:
         self.__is_initialized = False
@@ -51,18 +40,18 @@ class CoF_arm_calc():
 
         # NOTE: Specify dependency initial False initial status.
         self.__dependency_status = {
-            'dependency_node_name': False,
+            # 'dependency_node_name': False,
         }
 
         # NOTE: Specify dependency is_initialized topic (or any other topic,
         # which will be available when the dependency node is running properly).
         self.__dependency_status_topics = {
-            'dependency_node_name':
-                rospy.Subscriber(
-                    f'/dependency_node_name/is_initialized',
-                    Bool,
-                    self.__dependency_name_callback,
-                ),
+            # 'dependency_node_name':
+            #     rospy.Subscriber(
+            #         f'/dependency_node_name/is_initialized',
+            #         Bool,
+            #         self.__dependency_name_callback,
+            #     ),
         }
 
         # # Topic publisher:
@@ -74,7 +63,7 @@ class CoF_arm_calc():
 
         # # Topic subscriber:
         rospy.Subscriber(
-            f'{self.ROBOTNAME}/base_feedback/joint_state', #change
+            f'{self.ROBOTNAME}/base_feedback/joint_state',  #change
             JointState,
             self.__COF_callback,
         )
@@ -162,6 +151,141 @@ class CoF_arm_calc():
         self.__node_is_initialized.publish(self.__is_initialized)
 
     # # Public methods:
+    def cacl_com(self):
+        mb = 1.697
+        m1 = 1.377
+        m2 = 1.1636
+        m3 = 1.1636
+        m4 = 0.930
+        m5 = 0.678
+        m6 = 0.678
+        mn = 0.500
+        ml = 0
+        mgrip = 0.925
+
+        q = self.q
+
+        T01 = np.array(
+            [
+                [cos(q[0]), -sin(q[0]), 0, 0], [-sin(q[0]), -cos(q[0]), 0, 0],
+                [0, 0, -1, 0.1564], [0, 0, 0, 1]
+            ]
+        )
+        T12 = np.array(
+            [
+                [cos(q[1]), -sin(q[1]), 0, 0], [0, 0, -1, 0.0054],
+                [sin(q[1]), cos(q[1]), 0, -0.1284], [0, 0, 0, 1]
+            ]
+        )
+        T23 = np.array(
+            [
+                [cos(q[2]), -sin(q[2]), 0, 0], [0, 0, 1, -0.2104],
+                [-sin(q[2]), -cos(q[2]), 0, -0.0064], [0, 0, 0, 1]
+            ]
+        )
+        T34 = np.array(
+            [
+                [cos(q[3]), -sin(q[3]), 0, 0], [0, 0, -1, -0.0064],
+                [sin(q[3]), cos(q[3]), 0, -0.2104], [0, 0, 0, 1]
+            ]
+        )
+        T45 = np.array(
+            [
+                [cos(q[4]), -sin(q[4]), 0, 0], [0, 0, 1, -0.2084],
+                [-sin(q[4]), -cos(q[4]), 0, -0.0064], [0, 0, 0, 1]
+            ]
+        )
+        T56 = np.array(
+            [
+                [cos(q[5]), -sin(q[5]), 0, 0], [0, 0, -1, 0],
+                [sin(q[5]), cos(q[5]), 0, -0.1059], [0, 0, 0, 1]
+            ]
+        )
+        T67 = np.array(
+            [
+                [cos(q[6]), -sin(q[6]), 0, 0], [0, 0, 1, -0.1059],
+                [-sin(q[6]), -cos(q[6]), 0, 0], [0, 0, 0, 1]
+            ]
+        )
+        T7L = np.array(
+            [[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, -0.0615], [0, 0, 0, 1]]
+        )
+
+        gripper_com = np.array([0, 0, 0.058])
+        load_com = np.array([0, 0, 0.08765])
+
+        Mass_posb = np.array([-0.000648, -0.000166, 0.084487])
+        Mass_pos1_1 = np.array([-0.000023, -0.010364, -0.073360, 1])
+        Mass_pos1 = np.dot(T01, Mass_pos1_1.transpose())
+        Mass_pos2_1 = np.array([-0.000044, -0.099580, -0.013278, 1])
+        Mass_pos2 = np.dot(np.dot(T01, T12), Mass_pos2_1.transpose())
+        Mass_pos3_1 = np.array([-0.000044, -0.006641, -0.117892, 1])
+        Mass_pos3 = np.dot(
+            np.dot(np.dot(T01, T12), T23), Mass_pos3_1.transpose()
+        )
+        Mass_pos4_1 = np.array([-0.000018, -0.075478, -0.015006, 1])
+        Mass_pos4 = np.dot(
+            np.dot(np.dot(np.dot(T01, T12), T23), T34), Mass_pos4_1.transpose()
+        )
+        Mass_pos5_1 = np.array([0.000001, -0.009432, -0.063883, 1])
+        Mass_pos5 = np.dot(
+            np.dot(np.dot(np.dot(np.dot(T01, T12), T23), T34), T45),
+            Mass_pos5_1.transpose()
+        )
+        Mass_pos6_1 = np.array([0.000001, -0.045483, -0.009650, 1])
+        Mass_pos6 = np.dot(
+            np.dot(
+                np.dot(np.dot(np.dot(np.dot(T01, T12), T23), T34), T45), T56
+            ), Mass_pos6_1.transpose()
+        )
+        Mass_posN_1 = np.array([-0.000281, -0.011402, -0.029798, 1])
+        Mass_posN = np.dot(
+            np.dot(
+                np.dot(
+                    np.dot(np.dot(np.dot(np.dot(T01, T12), T23), T34), T45), T56
+                ), T67
+            ), Mass_posN_1.transpose()
+        )
+
+        Pos_L = np.dot(
+            np.dot(
+                np.dot(
+                    np.dot(np.dot(np.dot(np.dot(T01, T12), T23), T34), T45), T56
+                ), T67
+            ), T7L
+        )
+
+        ml_f = ml + mgrip
+        Mass_posL = np.array(
+            [0, 0, (gripper_com[2] * mgrip + load_com[2] * ml) / ml_f, 1]
+        )
+        Mass_posL = np.dot(Pos_L, Mass_posL.transpose())
+
+        X = (
+            Mass_posb[0] * mb + Mass_pos1[0] * m1 + Mass_pos2[0] * m2
+            + Mass_pos3[0] * m3 + Mass_pos4[0] * m4 + Mass_pos5[0] * m5
+            + Mass_pos6[0] * m6 + Mass_posN[0] * mn + Mass_posL[0] * ml_f
+        ) / (mb + m1 + m2 + m3 + m4 + m5 + m6 + mn + ml_f)
+
+        Y = (
+            Mass_posb[1] * mb + Mass_pos1[1] * m1 + Mass_pos2[1] * m2
+            + Mass_pos3[1] * m3 + Mass_pos4[1] * m4 + Mass_pos5[1] * m5
+            + Mass_pos6[1] * m6 + Mass_posN[1] * mn + Mass_posL[1] * ml_f
+        ) / (mb + m1 + m2 + m3 + m4 + m5 + m6 + mn + ml_f)
+
+        Z = (
+            Mass_posb[2] * mb + Mass_pos1[2] * m1 + Mass_pos2[2] * m2
+            + Mass_pos3[2] * m3 + Mass_pos4[2] * m4 + Mass_pos5[2] * m5
+            + Mass_pos6[2] * m6 + Mass_posN[2] * mn + Mass_posL[2] * ml_f
+        ) / (mb + m1 + m2 + m3 + m4 + m5 + m6 + mn + ml_f)
+
+        M_total = mb + m1 + m2 + m3 + m4 + m5 + m6 + mn + ml_f
+        self.Mass_pos_robot_fin = [X, Y, Z, M_total]
+
+        float64_array = Float64MultiArray()
+        float64_array.data = self.Mass_pos_robot_fin
+        self.__publisher.publish(float64_array)
+
     def main_loop(self):
         """
         
@@ -174,96 +298,9 @@ class CoF_arm_calc():
 
         # NOTE: Add code (function calls), which has to be executed once the
         # node was successfully initialized.
-
-        mb=CoF_arm_calc._mb
-        m1=CoF_arm_calc._m1
-        m2=CoF_arm_calc._m2
-        m3=CoF_arm_calc._m3
-        m4=CoF_arm_calc._m4
-        m5=CoF_arm_calc._m5
-        m6=CoF_arm_calc._m6
-        mn=CoF_arm_calc._mn
-        ml=CoF_arm_calc._ml
-        mgrip=CoF_arm_calc._mgrip
-        q=self.q
+        self.cacl_com()
         
-        T01=np.array([[cos(q[0]), -sin(q[0]), 0, 0],
-        [-sin(q[0]), -cos(q[0]), 0, 0],
-        [0, 0, -1, 0.1564],
-        [0, 0, 0, 1]])
-        T12=np.array([[cos(q[1]), -sin(q[1]), 0, 0],
-            [0, 0, -1, 0.0054],
-            [sin(q[1]), cos(q[1]), 0, -0.1284],
-            [0, 0, 0, 1]])
-        T23=np.array([[cos(q[2]), -sin(q[2]), 0, 0],
-            [0, 0, 1, -0.2104],
-            [-sin(q[2]), -cos(q[2]), 0, -0.0064],
-            [0, 0, 0, 1]])
-        T34=np.array([[cos(q[3]), -sin(q[3]), 0, 0],
-            [0, 0, -1, -0.0064],
-            [sin(q[3]), cos(q[3]), 0, -0.2104],
-            [0, 0, 0, 1]])
-        T45=np.array([[cos(q[4]), -sin(q[4]), 0, 0],
-            [0, 0, 1, -0.2084],
-            [-sin(q[4]), -cos(q[4]), 0, -0.0064],
-            [0, 0, 0, 1]])
-        T56=np.array([[cos(q[5]), -sin(q[5]), 0, 0],
-            [0, 0, -1, 0],
-            [sin(q[5]), cos(q[5]), 0, -0.1059],
-            [0, 0, 0, 1]])
-        T67=np.array([[cos(q[6]), -sin(q[6]), 0, 0],
-            [0, 0, 1, -0.1059],
-            [-sin(q[6]), -cos(q[6]), 0, 0],
-            [0, 0, 0, 1]])
-        T7L=np.array([[1, 0, 0, 0],
-            [0, -1, 0, 0],
-            [0, 0, -1, -0.0615],
-            [0, 0, 0, 1]])
         
-        gripper_com=np.array([0, 0, 0.058])
-        load_com=np.array([0, 0, 0.08765]) 
-
-        Mass_posb=np.array([-0.000648, -0.000166, 0.084487])
-        Mass_pos1_1=np.array([-0.000023, -0.010364, -0.073360, 1])
-        Mass_pos1=np.dot(T01, Mass_pos1_1.transpose())
-        Mass_pos2_1=np.array([-0.000044, -0.099580, -0.013278, 1])
-        Mass_pos2=np.dot(np.dot(T01,T12),Mass_pos2_1.transpose())
-        Mass_pos3_1=np.array([-0.000044, -0.006641, -0.117892, 1])
-        Mass_pos3=np.dot(np.dot(np.dot(T01,T12),T23),Mass_pos3_1.transpose())
-        Mass_pos4_1=np.array([-0.000018, -0.075478, -0.015006, 1])
-        Mass_pos4=np.dot(np.dot(np.dot(np.dot(T01,T12),T23),T34),Mass_pos4_1.transpose())
-        Mass_pos5_1=np.array([0.000001, -0.009432, -0.063883, 1])
-        Mass_pos5=np.dot(np.dot(np.dot(np.dot(np.dot(T01,T12),T23),T34),T45),Mass_pos5_1.transpose())
-        Mass_pos6_1=np.array([0.000001, -0.045483, -0.009650, 1])
-        Mass_pos6=np.dot(np.dot(np.dot(np.dot(np.dot(np.dot(T01,T12),T23),T34),T45),T56),Mass_pos6_1.transpose())
-        Mass_posN_1=np.array([-0.000281, -0.011402, -0.029798, 1])
-        Mass_posN=np.dot(np.dot(np.dot(np.dot(np.dot(np.dot(np.dot(T01,T12),T23),T34),T45),T56),T67),Mass_posN_1.transpose())
-
-        Pos_L=np.dot(np.dot(np.dot(np.dot(np.dot(np.dot(np.dot(T01,T12),T23),T34),T45),T56),T67),T7L)
-
-        ml_f=ml+mgrip
-        Mass_posL=np.array([0, 0, (gripper_com[2]*mgrip+load_com[2]*ml)/ml_f, 1])
-        Mass_posL=np.dot(Pos_L, Mass_posL.transpose())
-
-
-
-        X=(Mass_posb[0]*mb+Mass_pos1[0]*m1+Mass_pos2[0]*m2+Mass_pos3[0]*m3+Mass_pos4[0]*m4+
-        Mass_pos5[0]*m5+Mass_pos6[0]*m6+Mass_posN[0]*mn+Mass_posL[0]*ml_f)/(mb+m1+m2+m3+m4+m5+m6+mn+ml_f)
-        
-        Y=(Mass_posb[1]*mb+Mass_pos1[1]*m1+Mass_pos2[1]*m2+Mass_pos3[1]*m3+Mass_pos4[1]*m4+
-        Mass_pos5[1]*m5+Mass_pos6[1]*m6+Mass_posN[1]*mn+Mass_posL[1]*ml_f)/(mb+m1+m2+m3+m4+m5+m6+mn+ml_f)
-        
-        Z=(Mass_posb[2]*mb+Mass_pos1[2]*m1+Mass_pos2[2]*m2+Mass_pos3[2]*m3+Mass_pos4[2]*m4+
-        Mass_pos5[2]*m5+Mass_pos6[2]*m6+Mass_posN[2]*mn+Mass_posL[2]*ml_f)/(mb+m1+m2+m3+m4+m5+m6+mn+ml_f)
-        
-        M_total=mb+m1+m2+m3+m4+m5+m6+mn+ml_f
-        self.Mass_pos_robot_fin=[X,Y,Z, M_total]
-
-        float64_array = Float64MultiArray()
-        float64_array.data=self.Mass_pos_robot_fin
-        self.__publisher.publish(float64_array)
-   
-
 
     def node_shutdown(self):
         """

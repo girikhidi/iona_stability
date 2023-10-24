@@ -42,18 +42,18 @@ class ZMP_Forw():
 
         # NOTE: Specify dependency initial False initial status.
         self.__dependency_status = {
-            'dependency_node_name': False,
+            # 'dependency_node_name': False,
         }
 
         # NOTE: Specify dependency is_initialized topic (or any other topic,
         # which will be available when the dependency node is running properly).
         self.__dependency_status_topics = {
-            'dependency_node_name':
-                rospy.Subscriber(
-                    f'/dependency_node_name/is_initialized',
-                    Bool,
-                    self.__dependency_name_callback,
-                ),
+            # 'dependency_node_name':
+            #     rospy.Subscriber(
+            #         f'/dependency_node_name/is_initialized',
+            #         Bool,
+            #         self.__dependency_name_callback,
+            #     ),
         }
 
         # # Topic publisher:

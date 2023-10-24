@@ -24,23 +24,6 @@ class Cof_total():
         """
 
         # # Private constants:
-        _m_mobile=68
-        _m_stand=39.107
-        _m_base=_m_mobile+_m_stand
-        _m_chest=17.316
-        _hb=0.359
-        _hc=0.386 # height of the origin of the cheat coordinate system
-        _hs=0.56219 # height of center of mass of a stand
-        _xr=0.1375 # x transition of the robot in the frame of a chest
-        _xl=0.1375 # x transition of the robot in the frame of a chest
-        _yr=0.139 # y transition of the robot in the frame of a chest
-        _yl=-0.139 # y transition of the robot in the frame of a chest
-        _zr=0.1925 # z transition of the robot in the frame of a chest
-        _zl=0.1925 # z transition of the robot in the frame of a chest
-        _ar=45*np.pi/180
-        _al=45*np.pi/180
-        _off_chest=0.0995
-
         self.NODE_NAME='calc_com_total'
         self.Mass_pos_robot_R=[0.0, 0.0, 0.0]
         self.Mass_pos_robot_L=[0.0, 0.0, 0.0]
@@ -61,18 +44,18 @@ class Cof_total():
 
         # NOTE: Specify dependency initial False initial status.
         self.__dependency_status = {
-            'dependency_node_name': False,
+            # 'dependency_node_name': False,
         }
 
         # NOTE: Specify dependency is_initialized topic (or any other topic,
         # which will be available when the dependency node is running properly).
         self.__dependency_status_topics = {
-            'dependency_node_name':
-                rospy.Subscriber(
-                    f'/dependency_node_name/is_initialized',
-                    Bool,
-                    self.__dependency_name_callback,
-                ),
+            # 'dependency_node_name':
+            #     rospy.Subscriber(
+            #         f'/dependency_node_name/is_initialized',
+            #         Bool,
+            #         self.__dependency_name_callback,
+            #     ),
         }
 
         # # Topic publisher:
@@ -198,35 +181,23 @@ class Cof_total():
         self.__node_is_initialized.publish(self.__is_initialized)
 
     # # Public methods:
-    def main_loop(self):
-        """
-        
-        """
-
-        self.__check_initialization()
-
-        if not self.__is_initialized:
-            return
-
-        # NOTE: Add code (function calls), which has to be executed once the
-        # node was successfully initialized.
-
-        m_mobile=Cof_total._m_mobile
-        m_stand=Cof_total._m_stand
-        m_base=Cof_total._m_base
-        m_chest=Cof_total._m_chest
-        hb=Cof_total._hb
-        hc=Cof_total._hc
-        hs=Cof_total._hs
-        xr=Cof_total._xr
-        xl=Cof_total._xl
-        yr=Cof_total._yr
-        yl=Cof_total._yl
-        zr=Cof_total._zr
-        zl=Cof_total._zl
-        ar=Cof_total._ar
-        al=Cof_total._al
-        off_chest=Cof_total._off_chest
+    def cof_calc(self):
+        m_mobile=68
+        m_stand=39.107
+        m_base=m_mobile+m_stand
+        m_chest=17.316
+        hb=0.359
+        hc=0.386 # height of the origin of the cheat coordinate system
+        hs=0.56219 # height of center of mass of a stand
+        xr=0.1375 # x transition of the robot in the frame of a chest
+        xl=0.1375 # x transition of the robot in the frame of a chest
+        yr=0.139 # y transition of the robot in the frame of a chest
+        yl=-0.139 # y transition of the robot in the frame of a chest
+        zr=0.1925 # z transition of the robot in the frame of a chest
+        zl=0.1925 # z transition of the robot in the frame of a chest
+        ar=45*np.pi/180
+        al=45*np.pi/180
+        off_chest=0.0995
 
         Mass_pos_robotR=np.array([[self.Mass_pos_robot_R[0]], [self.Mass_pos_robot_R[1]], [self.Mass_pos_robot_R[2]], [1]])
         Mass_pos_robotL=np.array([[self.Mass_pos_robot_L[0]], [self.Mass_pos_robot_L[1]], [self.Mass_pos_robot_L[2]], [1]])
@@ -302,6 +273,21 @@ class Cof_total():
         float64_array.data=Mass_pos_fin
 
         self.__publisher.publish(float64_array)
+
+    def main_loop(self):
+        """
+        
+        """
+
+        self.__check_initialization()
+
+        if not self.__is_initialized:
+            return
+
+        # NOTE: Add code (function calls), which has to be executed once the
+        # node was successfully initialized.
+        self.cof_calc()
+        
 
     def node_shutdown(self):
         """
