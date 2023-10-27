@@ -5,29 +5,36 @@
 import rospy
 
 from std_msgs.msg import (Float64MultiArray, Bool)
-from oculus_ros.msg import ControllerJoystick
+from geometry_msgs.msg import Point
 import math
+from gopher_ros_clearcore.msg import Position
+from oculus_ros.msg import ControllerJoystick
 import numpy as np
 
-class ZMP_Forw():
+
+class ZMP_Inv():
     """
     
     """
 
-    def __init__(
-        self 
-    ):
+    def __init__(self):
         """
         
         """
 
         # # Private constants:
-        self.NODE_NAME='zmp_forw_acc'
-        self.acc_x=0
-        self.acc_y=0
-        self.Mass_pos_fin=[0,0,0]
-        self.Mass_rob=0
-        self.MAX_LINEAR_SPEED=0.5
+        self.NODE_NAME = 'zmp_inv'
+        self.acc_x = 0
+        self.acc_y = 0
+        self.Mass_pos_fin = [0, 0, 0]
+        self.Mass_rob = 0
+        self.Pos_c = 0
+        self.flag = 0
+        self.prev_pos = 0
+        self.counter = 0
+        self.CONTROLLER_SIDE = 'left'
+        self.MAX_LINEAR_SPEED = 0.5
+        self.steady_pos = self.Pos_c
         self.__oculus_joystick = ControllerJoystick()
         self.__target_linear_acc_init=0
 
@@ -58,28 +65,45 @@ class ZMP_Forw():
         }
 
         # # Topic publisher:
-        #Change 
+        #Change
+
         self.__publisher = rospy.Publisher(
             '/zmp_acc_max',
             Float64MultiArray,
             queue_size=1,
         )
 
+        self.__publisher_pos_rel = rospy.Publisher(
+            '/z_chest_pos',
+            Position,
+            queue_size=1,
+        )
+
         # # Topic subscriber:
 
         rospy.Subscriber(
-             'calc_com_total/com_fin', #change
+            'calc_com_total/com_fin',  #change
             Float64MultiArray,
             self.__COM_Total_callback,
         )
+
+        rospy.Subscriber(
+            'gopher_ros_slearcore/chest_position',  #change
+            Position,
+            self.__Chest_Pos_callback,
+        )
+
         rospy.Subscriber(
             f'oculus/{self.CONTROLLER_SIDE}/joystick',
             ControllerJoystick,
             self.__oculus_joystick_callback,
         )
 
-
-
+        rospy.Subscriber(
+            '/chest_position',
+            Point,
+            self.__Chest_Pos_callback,
+        )
 
     # # Dependency status callbacks:
     # NOTE: each dependency topic should have a callback function, which will
@@ -91,15 +115,16 @@ class ZMP_Forw():
 
         self.__dependency_status['dependency_node_name'] = message.data
 
-
-
     # # Topic callbacks:
+    def __COM_Total_callback(self, message):
+        self.Mass_pos_fin = [message.data[0], message.data[1], message.data[2]]
+        self.Mass_rob = message.data[3]
+
+    def __Chest_Pos_callback(self, message):
+        self.Pos_c = message.Z
+
     def __oculus_joystick_callback(self, message):
         self.__oculus_joystick = message
-    
-    def __COM_Total_callback(self, message):
-        self.Mass_pos_fin=[message.data[0], message.data[1], message.data[2]]
-        self.Mass_rob=message.data[3]
 
     # # Private methods:
     def __check_initialization(self):
@@ -170,6 +195,7 @@ class ZMP_Forw():
         self.__node_is_initialized.publish(self.__is_initialized)
 
     # # Public methods:
+
     def __check_dead_zones(self):
         """
         
@@ -215,8 +241,9 @@ class ZMP_Forw():
             updated_joystick[1] = 0.0
 
         return updated_joystick
-    
-    def max_acc_calc(self, target_linear_acc): #deal with target acc
+
+    def max_acc_calc(self, target_linear_acc):
+
         R=math.sqrt(self.Mass_pos_fin[0]*self.Mass_pos_fin[0]+self.Mass_pos_fin[1]*self.Mass_pos_fin[1])
         e=2.7
         XlimLow=-0.221/e
@@ -245,13 +272,14 @@ class ZMP_Forw():
 
         self.__publisher.publish(float64_array)
 
-        return max_linea_acc
-    
-    def target_linear_acc_calc(self, MAX_LINEAR_ACCELERATION):
+        return max_linea_acc, max_rot_acc, max_rot_vel
+
+    def target_vals_calc(self, MAX_LINEAR_ACCELERATION, MAX_ROTATION_SPEED, MAX_ROTATION_ACCELERATION):
 
         updated_joystick = self.__check_dead_zones()
 
         if abs(self.__oculus_joystick.position_y) > 0.01:  # Noisy joystick.
+            # Linear velocity.
 
             target_linear_acc = np.interp(
                 round(updated_joystick[1], 4),
@@ -259,8 +287,65 @@ class ZMP_Forw():
                 # NOTE: 0.08 and 0.8 - experimental.
                 [-0.8 * MAX_LINEAR_ACCELERATION, 0.8 * MAX_LINEAR_ACCELERATION], 
                 )
-        return target_linear_acc
+
+            if target_linear_velocity <= -0.5 * self.MAX_LINEAR_SPEED:
+                target_linear_velocity = -0.5 * self.MAX_LINEAR_SPEED
+
+
+        if abs(self.__oculus_joystick.position_x) > 0.01:  # Noisy joystick.
+            # Rotation velocity.
+            target_rotation_velocity = np.interp(
+                round(updated_joystick[0], 4),
+                [-1.0, 1.0],
+                [MAX_ROTATION_SPEED, -MAX_ROTATION_SPEED],
+            )
+
+            target_rotation_acc = np.interp(
+                round(updated_joystick[0], 4),
+                [-1.0, 1.0],
+                [-MAX_ROTATION_ACCELERATION, MAX_ROTATION_ACCELERATION], 
+                )
+        return target_linear_acc, target_rotation_velocity, target_rotation_acc
     
+    def chest_pos_calc(self, target_linear_acc, target_rot_vel, target_rot_acc):
+        R = math.sqrt(
+            self.Mass_pos_fin[0] * self.Mass_pos_fin[0]
+            + self.Mass_pos_fin[1] * self.Mass_pos_fin[1]
+        )
+        e = 2.7
+        XlimLow = -0.221 / e
+        g = 9.81
+        P_gain = 1
+
+        cosa = self.Mass_pos_fin[0] / R
+        sina = self.Mass_pos_fin[1] / R  
+
+        if abs(self.__oculus_joystick.position_y
+                ) < 0.01 and abs(self.__oculus_joystick.position_x) < 0.01:
+            counter = counter + 1
+            if counter > 50:
+                steady_pos = self.Pos_c
+
+        acc_X_max_current = (
+            XlimLow * self.Mass_rob * g - self.Mass_rob * self.Mass_pos_fin[0]
+        ) / (-self.Mass_rob * self.Mass_pos_fin[2])
+
+        a_c = R * target_rot_vel * target_rot_vel
+        a_t = R * target_rot_acc
+        acc_X_current = -a_c * cosa + a_t * sina + target_linear_acc
+
+        if acc_X_max_current >= acc_X_current:
+            abs_pos = steady_pos
+        else:
+            e_acc = acc_X_max_current - acc_X_current
+            abs_pos = self.Pos_c + e_acc * P_gain
+
+        abs_pos_msg = Position()
+        abs_pos_msg.data.position = abs_pos
+        abs_pos_msg.data.velocity = 0.5
+       
+        self.__publisher_pos_rel.publish(abs_pos_msg)
+
     def main_loop(self):
         """
         
@@ -273,10 +358,11 @@ class ZMP_Forw():
 
         # NOTE: Add code (function calls), which has to be executed once the
         # node was successfully initialized.
+        max_linea_acc, max_rot_acc, max_rot_vel=self.max_acc_calc(self.__target_linear_acc_init)
+        self.__target_linear_acc_init, target_rot_vel, target_rot_acc=self.target_vals_calc(max_linea_acc, max_rot_vel, max_rot_acc)
+        self.chest_pos_calc(self.__target_linear_acc_init, target_rot_vel, target_rot_acc)
         
-        max_lin_acc=self.max_acc_calc(self.__target_linear_acc_init)
-        self.__target_linear_acc_init=self.target_linear_acc_calc(max_lin_acc)
-        
+
     def node_shutdown(self):
         """
         
@@ -298,9 +384,9 @@ def main():
 
     # # Default node initialization.
     # This name is replaced when a launch file is used.
-    rospy.init_node('zmp_forw_acc')
+    rospy.init_node('zmp_inv')
 
-    class_instance = ZMP_Forw()
+    class_instance = ZMP_Inv()
 
     rospy.on_shutdown(class_instance.node_shutdown)
 
