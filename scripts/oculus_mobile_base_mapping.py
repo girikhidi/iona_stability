@@ -180,20 +180,26 @@ class OculusMobileBaseMapping:
             )
 
             # Linear acceleration.
-            if self.__oculus_joystick.position_y >0: 
-                self.__target_linear_acc = np.interp(
-                    round(updated_joystick[1], 4),
-                    [0.01, 1.0],
-                    # NOTE: 0.08 and 0.8 - experimental.
-                    [0.08 * self.MAX_LINEAR_ACCELERATION, 0.8 * self.MAX_LINEAR_ACCELERATION], 
-                    )
-            elif self.__oculus_joystick.position_y <0: 
-                self.__target_linear_acc = np.interp(
-                    round(updated_joystick[1], 4),
-                    [-1.0, -0.01],
-                    # NOTE: 0.08 and 0.8 - experimental.
-                    [-0.8 * self.MAX_LINEAR_ACCELERATION, -0.08 * self.MAX_LINEAR_ACCELERATION], 
-                    ) 
+            # if self.__oculus_joystick.position_y >0: 
+            #     self.__target_linear_acc = np.interp(
+            #         round(updated_joystick[1], 4),
+            #         [0.01, 1.0],
+            #         # NOTE: 0.08 and 0.8 - experimental.
+            #         [0.08 * self.MAX_LINEAR_ACCELERATION, 0.8 * self.MAX_LINEAR_ACCELERATION], 
+            #         )
+            # elif self.__oculus_joystick.position_y <0: 
+            #     self.__target_linear_acc = np.interp(
+            #         round(updated_joystick[1], 4),
+            #         [-1.0, -0.01],
+            #         # NOTE: 0.08 and 0.8 - experimental.
+            #         [-0.8 * self.MAX_LINEAR_ACCELERATION, -0.08 * self.MAX_LINEAR_ACCELERATION], 
+            #         ) 
+            self.__target_linear_acc = np.interp(
+                round(updated_joystick[1], 4),
+                [-1.0, 1.0],
+                # NOTE: 0.08 and 0.8 - experimental.
+                [-0.8 * self.MAX_LINEAR_ACCELERATION, 0.8 * self.MAX_LINEAR_ACCELERATION], 
+                )
 
             if self.__target_linear_velocity <= -0.5 * self.MAX_LINEAR_SPEED:
                 self.__target_linear_velocity = -0.5 * self.MAX_LINEAR_SPEED
@@ -208,20 +214,25 @@ class OculusMobileBaseMapping:
             )
 
             # Rotation acceleration.
-            if self.__oculus_joystick.position_x >0:
-                self.__target_rotation_acc = np.interp(
-                    round(updated_joystick[0], 4),
-                    [0.01, 1.0],
-                    [0.01 * self.MAX_ROTATION_ACCELERATION, self.MAX_ROTATION_ACCELERATION], 
-                ) 
-            if self.__oculus_joystick.position_x <0:
-                self.__target_rotation_acc = np.interp(
-                    round(updated_joystick[0], 4),
-                    [-1.0, -0.01],
-                    [-self.MAX_ROTATION_ACCELERATION, -0.01*self.MAX_ROTATION_ACCELERATION], 
-                ) 
+            # if self.__oculus_joystick.position_x >0:
+            #     self.__target_rotation_acc = np.interp(
+            #         round(updated_joystick[0], 4),
+            #         [0.01, 1.0],
+            #         [0.01 * self.MAX_ROTATION_ACCELERATION, self.MAX_ROTATION_ACCELERATION], 
+            #     ) 
+            # if self.__oculus_joystick.position_x <0:
+            #     self.__target_rotation_acc = np.interp(
+            #         round(updated_joystick[0], 4),
+            #         [-1.0, -0.01],
+            #         [-self.MAX_ROTATION_ACCELERATION, -0.01*self.MAX_ROTATION_ACCELERATION], 
+            #     ) 
 
-
+            
+            self.__target_rotation_acc = np.interp(
+                round(updated_joystick[0], 4),
+                [-1.0, 1.0],
+                [-self.MAX_ROTATION_ACCELERATION, self.MAX_ROTATION_ACCELERATION], 
+                )
             
 
         # Decceleration with 0 joystick input:
