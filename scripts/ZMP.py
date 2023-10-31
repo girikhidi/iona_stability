@@ -26,6 +26,9 @@ class ZMP_simple():
         self.acc_y=0
         self.Mass_pos_fin=[0,0,0]
         self.Mass_rob=0
+        self.__flag=0
+        self.__count=0
+        self.__flag_cross=0
 
         # # Initialization and dependency status topics:
         self.__is_initialized = False
@@ -39,26 +42,22 @@ class ZMP_simple():
 
         # NOTE: Specify dependency initial False initial status.
         self.__dependency_status = {
-            'dependency_node_name': False,
+           # 'dependency_node_name': False,
         }
 
         # NOTE: Specify dependency is_initialized topic (or any other topic,
         # which will be available when the dependency node is running properly).
         self.__dependency_status_topics = {
-            'dependency_node_name':
-                rospy.Subscriber(
-                    f'/dependency_node_name/is_initialized',
-                    Bool,
-                    self.__dependency_name_callback,
-                ),
+            # 'dependency_node_name':
+            #     rospy.Subscriber(
+            #         f'/dependency_node_name/is_initialized',
+            #         Bool,
+            #         self.__dependency_name_callback,
+            #     ),
         }
 
         # # Topic publisher:
-        self.__publisher = rospy.Publisher(
-            f'{self.NODE_NAME}/ZMP_point',
-            Float64MultiArray,
-            queue_size=1,
-        )
+    
 
         # # Topic subscriber:
         rospy.Subscriber(
@@ -68,7 +67,7 @@ class ZMP_simple():
         )
 
         rospy.Subscriber(
-            'COF_total/COM_Fin', #change
+            'calc_com_total/com_fin', #change
             Float64MultiArray,
             self.__COM_Total_callback,
         )
@@ -88,10 +87,11 @@ class ZMP_simple():
 
 
     # # Topic callbacks:
+
     def __IMU_callback(self, message):
         self.acc_x = message.linear_acceleration[0]
         self.acc_y = message.linear_acceleration[1]
-
+    
     def __COM_Total_callback(self, message):
         self.Mass_pos_fin=[message.data[0], message.data[1], message.data[2]]
         self.Mass_rob=message.data[3]
@@ -167,6 +167,31 @@ class ZMP_simple():
         self.__node_is_initialized.publish(self.__is_initialized)
 
     # # Public methods:
+
+    def zmp_ass(self):
+        acc_rob=[self.acc_x, self.acc_y, 0]
+        g=9.81
+
+        Xz=(self.Mass_rob*(acc_rob[2]+g)*self.Mass_pos_fin[0]-self.Mass_rob*self.Mass_pos_fin[2]*acc_rob[0])/(self.Mass_rob*(acc_rob[2]+g))
+        Yz=(self.Mass_rob*(acc_rob[2]+g)*self.Mass_pos_fin[1]-self.Mass_rob*self.Mass_pos_fin[2]*acc_rob[1])/(self.Mass_rob*(acc_rob[2]+g))
+
+        XlimLow=-0.221
+        YlimLow=-0.221
+
+        if abs(Xz)>abs(XlimLow/2.7) and abs(Yz)>abs(YlimLow/2.7):
+            self.__flag=self.__flag+1
+        elif abs(Xz)<=abs(XlimLow/2.7) and abs(Yz)>abs(YlimLow/2.7):
+            self.__flag=self.__flag+1
+        elif abs(Xz)>abs(XlimLow/2.7) and abs(Yz)<=abs(YlimLow/2.7):
+            self.__flag=self.__flag+1
+        elif abs(Xz)<=abs(XlimLow/2.7) and abs(Yz)<=abs(YlimLow/2.7):
+            self.__flag=0
+        
+        if self.__flag==1:
+            self.__count=self.__count+1
+            print(f'warning {self.__count}')
+        
+
     def main_loop(self):
         """
         
@@ -179,26 +204,8 @@ class ZMP_simple():
 
         # NOTE: Add code (function calls), which has to be executed once the
         # node was successfully initialized.
-
-        R=sqrt(self.Mass_pos_fin[0]*self.Mass_pos_fin[0]+self.Mass_pos_fin[1]*self.Mass_pos_fin[1])
-
-        acc_rob=[self.acc_x, self.acc_y, 0]
-        g=9.81
-
-        Xz=(self.Mass_rob*(acc_rob[2]+g)*self.Mass_pos_fin[0]-self.Mass_rob*self.Mass_pos_fin[2]*acc_rob[0])/(self.Mass_rob*(acc_rob[2]+g))
-        Yz=(self.Mass_rob*(acc_rob[2]+g)*self.Mass_pos_fin[1]-self.Mass_rob*self.Mass_pos_fin[2]*acc_rob[1])/(self.Mass_rob*(acc_rob[2]+g))
+        self.zmp_ass()
         
-        XlimUp=0.221
-        XlimLow=-0.221
-        YlimUp=0.221
-        YlimLow=-0.221
-        
-
-
-        float64_array = Float64MultiArray()
-        float64_array.data=[Xz, Yz]
-
-        self.__publisher.publish(float64_array)
         
     def node_shutdown(self):
         """
