@@ -5,9 +5,8 @@
 import rospy
 
 from std_msgs.msg import (Float64MultiArray, Bool)
-from oculus_ros.msg import ControllerJoystick
 import math
-import numpy as np
+
 
 class ZMP_Forw():
     """
@@ -28,8 +27,7 @@ class ZMP_Forw():
         self.Mass_pos_fin=[0,0,0]
         self.Mass_rob=0
         self.MAX_LINEAR_SPEED=0.5
-        self.__oculus_joystick = ControllerJoystick()
-        self.__target_linear_acc_init=0
+        self.__current_linear_acc=0
 
         # # Initialization and dependency status topics:
         self.__is_initialized = False
@@ -72,10 +70,11 @@ class ZMP_Forw():
             Float64MultiArray,
             self.__COM_Total_callback,
         )
+        
         rospy.Subscriber(
-            f'oculus/{self.CONTROLLER_SIDE}/joystick',
-            ControllerJoystick,
-            self.__oculus_joystick_callback,
+            '/current_acc',
+            Float64MultiArray,
+            self.__current_acc_callback,
         )
 
 
@@ -94,8 +93,8 @@ class ZMP_Forw():
 
 
     # # Topic callbacks:
-    def __oculus_joystick_callback(self, message):
-        self.__oculus_joystick = message
+    def __current_acc_callback(self, message):
+        self.__current_linear_acc=message.data[0]
     
     def __COM_Total_callback(self, message):
         self.Mass_pos_fin=[message.data[0], message.data[1], message.data[2]]
@@ -169,54 +168,8 @@ class ZMP_Forw():
 
         self.__node_is_initialized.publish(self.__is_initialized)
 
-    # # Public methods:
-    def __check_dead_zones(self):
-        """
-        
-        """
-
-        updated_joystick = np.array(
-            [
-                self.__oculus_joystick.position_x,
-                self.__oculus_joystick.position_y,
-            ]
-        )
-
-        dead_zone_margins = {
-            'up': 15,
-            'down': 25,
-            'left_right': 0,
-        }
-
-        angle = math.degrees(
-            math.atan2(updated_joystick[1], updated_joystick[0])
-        )
-
-        if (
-            (
-                angle < 90 + dead_zone_margins['up']
-                and angle > 90 - dead_zone_margins['up']
-            ) or (
-                angle > -90 - dead_zone_margins['down']
-                and angle < -90 + dead_zone_margins['down']
-            )
-        ):
-            updated_joystick[0] = 0.0
-
-        elif (
-            (
-                angle < 0 + dead_zone_margins['left_right']
-                and angle > 0 - dead_zone_margins['down']
-            ) or (
-                angle < -180 + dead_zone_margins['left_right']
-                and angle > 180 - dead_zone_margins['down']
-            )
-        ):
-            updated_joystick[1] = 0.0
-
-        return updated_joystick
-    
-    def max_acc_calc(self, target_linear_acc): #deal with target acc
+    # # Public methods:   
+    def max_acc_calc(self, current_linear_acc): #deal with target acc
         R=math.sqrt(self.Mass_pos_fin[0]*self.Mass_pos_fin[0]+self.Mass_pos_fin[1]*self.Mass_pos_fin[1])
         e=2.7
         XlimLow=-0.221/e
@@ -233,7 +186,7 @@ class ZMP_Forw():
         acc_Y_max=(YlimLow*self.Mass_rob*g-self.Mass_rob*self.Mass_pos_fin[1])/(-self.Mass_rob*self.Mass_pos_fin[2])
       
 
-        a_c_max=(acc_X_max-tga*acc_Y_max-target_linear_acc)/(-cosa-tga*sina)
+        a_c_max=(acc_X_max-tga*acc_Y_max-current_linear_acc)/(-cosa-tga*sina)
         a_t_max=(acc_Y_max-sina*a_c_max)/(cosa)
         max_rot_vel=math.sqrt(a_c_max/R)
         max_rot_acc=a_t_max/R
@@ -244,22 +197,6 @@ class ZMP_Forw():
         float64_array.data=[max_linea_acc, max_rot_acc, max_rot_vel]
 
         self.__publisher.publish(float64_array)
-
-        return max_linea_acc
-    
-    def target_linear_acc_calc(self, MAX_LINEAR_ACCELERATION):
-
-        updated_joystick = self.__check_dead_zones()
-
-        if abs(self.__oculus_joystick.position_y) > 0.01:  # Noisy joystick.
-
-            target_linear_acc = np.interp(
-                round(updated_joystick[1], 4),
-                [-1.0, 1.0],
-                # NOTE: 0.08 and 0.8 - experimental.
-                [-0.8 * MAX_LINEAR_ACCELERATION, 0.8 * MAX_LINEAR_ACCELERATION], 
-                )
-        return target_linear_acc
     
     def main_loop(self):
         """
@@ -270,12 +207,8 @@ class ZMP_Forw():
 
         if not self.__is_initialized:
             return
-
-        # NOTE: Add code (function calls), which has to be executed once the
-        # node was successfully initialized.
         
-        max_lin_acc=self.max_acc_calc(self.__target_linear_acc_init)
-        self.__target_linear_acc_init=self.target_linear_acc_calc(max_lin_acc)
+        self.max_acc_calc(self.__current_linear_acc)
         
     def node_shutdown(self):
         """

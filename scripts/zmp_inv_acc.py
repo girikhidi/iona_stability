@@ -8,8 +8,11 @@ from std_msgs.msg import (Float64MultiArray, Bool)
 from geometry_msgs.msg import Point
 import math
 from gopher_ros_clearcore.msg import Position
-from oculus_ros.msg import ControllerJoystick
 import numpy as np
+from oculus_ros.msg import (
+    ControllerButtons,
+    ControllerJoystick,
+)
 
 
 class ZMP_Inv():
@@ -24,19 +27,22 @@ class ZMP_Inv():
 
         # # Private constants:
         self.NODE_NAME = 'zmp_inv'
-        self.acc_x = 0
-        self.acc_y = 0
-        self.Mass_pos_fin = [0, 0, 0]
-        self.Mass_rob = 0
-        self.Pos_c = 0
-        self.flag = 0
-        self.prev_pos = 0
-        self.counter = 0
-        self.CONTROLLER_SIDE = 'left'
-        self.MAX_LINEAR_SPEED = 0.5
-        self.steady_pos = self.Pos_c
-        self.__oculus_joystick = ControllerJoystick()
+        self.MAX_CHEST_VELOCITY=0.5
+        self.__mass_pos_fin = [0, 0, 0]
+        self.__mass_rob = 0
+        self.__pos_c = 0
+        self.__counter = 0
+        self.__steady_pos = self.__pos_c
+        self.__abs_pos_c=self.__pos_c
         self.__target_linear_acc_init=0
+        self.__current_linear_acc=0
+        self.__current_rotational_acc=0
+        self.__target_rotational_velocity=0
+        self.__target_linear_velocity=0
+        self.__p_gain=1
+        self.__oculus_joystick = ControllerJoystick()
+        self.__joystick_button_state = 0
+        self.__control_mode = 'autonomy_control'
 
         # # Initialization and dependency status topics:
         self.__is_initialized = False
@@ -94,15 +100,21 @@ class ZMP_Inv():
         )
 
         rospy.Subscriber(
-            f'oculus/{self.CONTROLLER_SIDE}/joystick',
-            ControllerJoystick,
-            self.__oculus_joystick_callback,
-        )
-
-        rospy.Subscriber(
             '/chest_position',
             Point,
             self.__Chest_Pos_callback,
+        )
+
+        rospy.Subscriber(
+            '/current_acc',
+            Float64MultiArray,
+            self.__current_acc_callback,
+        )
+
+        rospy.Subscriber(
+            f'/{self.CONTROLLER_SIDE}/controller_feedback/joystick',
+            ControllerJoystick,
+            self.__oculus_joystick_callback,
         )
 
     # # Dependency status callbacks:
@@ -116,15 +128,25 @@ class ZMP_Inv():
         self.__dependency_status['dependency_node_name'] = message.data
 
     # # Topic callbacks:
+    def __oculus_joystick_callback(self, message):
+        """
+
+        """
+
+        self.__oculus_joystick = message
+
     def __COM_Total_callback(self, message):
-        self.Mass_pos_fin = [message.data[0], message.data[1], message.data[2]]
-        self.Mass_rob = message.data[3]
+        self.__mass_pos_fin = [message.data[0], message.data[1], message.data[2]]
+        self.__mass_rob = message.data[3]
 
     def __Chest_Pos_callback(self, message):
-        self.Pos_c = message.Z
+        self.__pos_c = message.Z
 
-    def __oculus_joystick_callback(self, message):
-        self.__oculus_joystick = message
+    def __current_acc_callback(self, message):
+        self.__current_linear_acc=message.data[0]
+        self.__current_rotational_acc=message.data[1]
+        self.__target_linear_velocity=message.data[2]
+        self.__current_rotational_acc=message.data[3]
 
     # # Private methods:
     def __check_initialization(self):
@@ -195,72 +217,58 @@ class ZMP_Inv():
         self.__node_is_initialized.publish(self.__is_initialized)
 
     # # Public methods:
-
-    def __check_dead_zones(self):
+    def __joystick_button_state_machine(self):
         """
         
         """
 
-        updated_joystick = np.array(
-            [
-                self.__oculus_joystick.position_x,
-                self.__oculus_joystick.position_y,
-            ]
-        )
-
-        dead_zone_margins = {
-            'up': 15,
-            'down': 25,
-            'left_right': 0,
-        }
-
-        angle = math.degrees(
-            math.atan2(updated_joystick[1], updated_joystick[0])
-        )
-
+        # State 0: Joystick button was pressed. Rotation only mode.
         if (
-            (
-                angle < 90 + dead_zone_margins['up']
-                and angle > 90 - dead_zone_margins['up']
-            ) or (
-                angle > -90 - dead_zone_margins['down']
-                and angle < -90 + dead_zone_margins['down']
-            )
+            self.__oculus_joystick.button and self.__joystick_button_state == 0
         ):
-            updated_joystick[0] = 0.0
+            self.__control_mode = 'user_control'
+            self.__joystick_button_state = 1
 
+        # State 1: Joystick button was released.
         elif (
-            (
-                angle < 0 + dead_zone_margins['left_right']
-                and angle > 0 - dead_zone_margins['down']
-            ) or (
-                angle < -180 + dead_zone_margins['left_right']
-                and angle > 180 - dead_zone_margins['down']
-            )
+            not self.__oculus_joystick.button
+            and self.__joystick_button_state == 1
         ):
-            updated_joystick[1] = 0.0
+            self.__joystick_button_state = 2
 
-        return updated_joystick
+        # State 2: Joystick button was pressed. Normal control mode.
+        if (
+            self.__oculus_joystick.button and self.__joystick_button_state == 2
+        ):
+            self.__control_mode = 'autonomy_control'
+            self.__joystick_button_state = 3
 
-    def max_acc_calc(self, target_linear_acc):
+        # State 3: Joystick button was released.
+        elif (
+            not self.__oculus_joystick.button
+            and self.__joystick_button_state == 3
+        ):
+            self.__joystick_button_state = 0
 
-        R=math.sqrt(self.Mass_pos_fin[0]*self.Mass_pos_fin[0]+self.Mass_pos_fin[1]*self.Mass_pos_fin[1])
+    def max_acc_calc(self, current_linear_acc):
+
+        R=math.sqrt(self.__mass_pos_fin[0]*self.__mass_pos_fin[0]+self.__mass_pos_fin[1]*self.__mass_pos_fin[1])
         e=2.7
         XlimLow=-0.221/e
         YlimLow=-0.221/e
         g=9.81
 
-        cosa=self.Mass_pos_fin[0]/R
-        sina=self.Mass_pos_fin[1]/R
-        tga=self.Mass_pos_fin[1]/self.Mass_pos_fin[0]
+        cosa=self.__mass_pos_fin[0]/R
+        sina=self.__mass_pos_fin[1]/R
+        tga=self.__mass_pos_fin[1]/self.__mass_pos_fin[0]
         
 
-        acc_X_max=(XlimLow*self.Mass_rob*g-self.Mass_rob*self.Mass_pos_fin[0])/(-self.Mass_rob*self.Mass_pos_fin[2])
+        acc_X_max=(XlimLow*self.__mass_rob*g-self.__mass_rob*self.__mass_pos_fin[0])/(-self.__mass_rob*self.__mass_pos_fin[2])
        
-        acc_Y_max=(YlimLow*self.Mass_rob*g-self.Mass_rob*self.Mass_pos_fin[1])/(-self.Mass_rob*self.Mass_pos_fin[2])
+        acc_Y_max=(YlimLow*self.__mass_rob*g-self.__mass_rob*self.__mass_pos_fin[1])/(-self.__mass_rob*self.__mass_pos_fin[2])
       
 
-        a_c_max=(acc_X_max-tga*acc_Y_max-target_linear_acc)/(-cosa-tga*sina)
+        a_c_max=(acc_X_max-tga*acc_Y_max-current_linear_acc)/(-cosa-tga*sina)
         a_t_max=(acc_Y_max-sina*a_c_max)/(cosa)
         max_rot_vel=math.sqrt(a_c_max/R)
         max_rot_acc=a_t_max/R
@@ -272,78 +280,53 @@ class ZMP_Inv():
 
         self.__publisher.publish(float64_array)
 
-        return max_linea_acc, max_rot_acc, max_rot_vel
-
-    def target_vals_calc(self, MAX_LINEAR_ACCELERATION, MAX_ROTATION_SPEED, MAX_ROTATION_ACCELERATION):
-
-        updated_joystick = self.__check_dead_zones()
-
-        if abs(self.__oculus_joystick.position_y) > 0.01:  # Noisy joystick.
-            # Linear velocity.
-
-            target_linear_acc = np.interp(
-                round(updated_joystick[1], 4),
-                [-1.0, 1.0],
-                # NOTE: 0.08 and 0.8 - experimental.
-                [-0.8 * MAX_LINEAR_ACCELERATION, 0.8 * MAX_LINEAR_ACCELERATION], 
-                )
-
-            if target_linear_velocity <= -0.5 * self.MAX_LINEAR_SPEED:
-                target_linear_velocity = -0.5 * self.MAX_LINEAR_SPEED
-
-
-        if abs(self.__oculus_joystick.position_x) > 0.01:  # Noisy joystick.
-            # Rotation velocity.
-            target_rotation_velocity = np.interp(
-                round(updated_joystick[0], 4),
-                [-1.0, 1.0],
-                [MAX_ROTATION_SPEED, -MAX_ROTATION_SPEED],
-            )
-
-            target_rotation_acc = np.interp(
-                round(updated_joystick[0], 4),
-                [-1.0, 1.0],
-                [-MAX_ROTATION_ACCELERATION, MAX_ROTATION_ACCELERATION], 
-                )
-        return target_linear_acc, target_rotation_velocity, target_rotation_acc
     
-    def chest_pos_calc(self, target_linear_acc, target_rot_vel, target_rot_acc):
+    def chest_pos_calc(self, current_linear_acc, target_rot_vel, current_rot_acc):
         R = math.sqrt(
-            self.Mass_pos_fin[0] * self.Mass_pos_fin[0]
-            + self.Mass_pos_fin[1] * self.Mass_pos_fin[1]
+            self.__mass_pos_fin[0] * self.__mass_pos_fin[0]
+            + self.__mass_pos_fin[1] * self.__mass_pos_fin[1]
         )
         e = 2.7
         XlimLow = -0.221 / e
         g = 9.81
-        P_gain = 1
+        
 
-        cosa = self.Mass_pos_fin[0] / R
-        sina = self.Mass_pos_fin[1] / R  
+        cosa = self.__mass_pos_fin[0] / R
+        sina = self.__mass_pos_fin[1] / R  
 
-        if abs(self.__oculus_joystick.position_y
-                ) < 0.01 and abs(self.__oculus_joystick.position_x) < 0.01:
-            counter = counter + 1
-            if counter > 50:
-                steady_pos = self.Pos_c
+        # if self.__target_linear_velocity==0 and self.__target_rotational_velocity==0: 
+        #     self.__counter = self.__counter + 1
+        #     if self.__counter > 50:
+        #         self.__steady_pos = self.__pos_c
+        # else:
+        #     self.__counter=0
 
         acc_X_max_current = (
-            XlimLow * self.Mass_rob * g - self.Mass_rob * self.Mass_pos_fin[0]
-        ) / (-self.Mass_rob * self.Mass_pos_fin[2])
+            XlimLow * self.__mass_rob * g - self.__mass_rob * self.__mass_pos_fin[0]
+        ) / (-self.__mass_rob * self.__mass_pos_fin[2])
 
         a_c = R * target_rot_vel * target_rot_vel
-        a_t = R * target_rot_acc
-        acc_X_current = -a_c * cosa + a_t * sina + target_linear_acc
+        a_t = R * current_rot_acc
+        acc_X_current = -a_c * cosa + a_t * sina + current_linear_acc
+        
+        #Position controller
+        e_acc = acc_X_max_current - acc_X_current
+        self.__abs_pos_c = self.__pos_c + e_acc * self.__p_gain
 
-        if acc_X_max_current >= acc_X_current:
-            abs_pos = steady_pos
-        else:
-            e_acc = acc_X_max_current - acc_X_current
-            abs_pos = self.Pos_c + e_acc * P_gain
+        if self.__abs_pos_c>=440:
+            self.__abs_pos_c=440
+
+    def __publish_pos(self):
 
         abs_pos_msg = Position()
-        abs_pos_msg.data.position = abs_pos
-        abs_pos_msg.data.velocity = 0.5
-       
+        abs_pos_msg.data.velocity = self.MAX_CHEST_VELOCITY
+        
+        self.__joystick_button_state_machine()
+
+        if self.__control_mode == 'user_control':
+           abs_pos_msg.data.position = self.__steady_pos
+        else:
+            abs_pos_msg.data.position = self.__abs_pos_c
         self.__publisher_pos_rel.publish(abs_pos_msg)
 
     def main_loop(self):
@@ -356,11 +339,13 @@ class ZMP_Inv():
         if not self.__is_initialized:
             return
 
-        # NOTE: Add code (function calls), which has to be executed once the
-        # node was successfully initialized.
-        max_linea_acc, max_rot_acc, max_rot_vel=self.max_acc_calc(self.__target_linear_acc_init)
-        self.__target_linear_acc_init, target_rot_vel, target_rot_acc=self.target_vals_calc(max_linea_acc, max_rot_vel, max_rot_acc)
-        self.chest_pos_calc(self.__target_linear_acc_init, target_rot_vel, target_rot_acc)
+        self.max_acc_calc(self.__current_linear_acc)
+
+        self.chest_pos_calc(self.__target_linear_acc_init, self.__target_rotational_velocity, self.__current_rotational_acc)
+
+        self.__publish_pos()
+        
+        print(self.__control_mode)
         
 
     def node_shutdown(self):
