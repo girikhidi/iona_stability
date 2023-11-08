@@ -4,7 +4,11 @@
 """
 import rospy
 
-from std_msgs.msg import (Float64MultiArray, Bool)
+from std_msgs.msg import (
+    Float64MultiArray,
+    Bool,
+    Float64,
+)
 from geometry_msgs.msg import Point
 import math
 from gopher_ros_clearcore.msg import Position
@@ -27,22 +31,23 @@ class ZMP_Inv():
 
         # # Private constants:
         self.NODE_NAME = 'zmp_inv'
-        self.MAX_CHEST_VELOCITY=0.5
-        self.__mass_pos_fin = [0, 0, 0]
-        self.__mass_rob = 0
+        self.MAX_CHEST_VELOCITY = 0.5
+        self.__mass_pos_fin = [0.001, 0.001, 0.001]
+        self.__mass_rob = 130
         self.__pos_c = 0
         self.__counter = 0
-        self.__steady_pos = self.__pos_c
-        self.__abs_pos_c=self.__pos_c
-        self.__target_linear_acc_init=0
-        self.__current_linear_acc=0
-        self.__current_rotational_acc=0
-        self.__target_rotational_velocity=0
-        self.__target_linear_velocity=0
-        self.__p_gain=1
+        self.__steady_pos = 440
+        self.__abs_pos_c = self.__pos_c
+        self.__current_linear_acc = 0
+        self.__current_rotational_acc = 0
+        self.__current_rotational_velocity = 0
+        self.__target_linear_velocity = 0
+        self.__p_gain = 0.5
         self.__oculus_joystick = ControllerJoystick()
         self.__joystick_button_state = 0
         self.__control_mode = 'autonomy_control'
+        self.CONTROLLER_SIDE = 'left'
+        self.__Z_no_chest = 0.5
 
         # # Initialization and dependency status topics:
         self.__is_initialized = False
@@ -71,15 +76,19 @@ class ZMP_Inv():
         }
 
         # # Topic publisher:
-        #Change
+        self.__error = rospy.Publisher(
+            '/acceleration/error',
+            Float64,
+            queue_size=1,
+        )
 
-        self.__publisher = rospy.Publisher(
-            '/zmp_acc_max',
+        self.__max_motion_parameters = rospy.Publisher(
+            '/fetch/max_motion_parameters',
             Float64MultiArray,
             queue_size=1,
         )
 
-        self.__publisher_pos_rel = rospy.Publisher(
+        self.__publisher_pos_abs = rospy.Publisher(
             '/z_chest_pos',
             Position,
             queue_size=1,
@@ -94,27 +103,27 @@ class ZMP_Inv():
         )
 
         rospy.Subscriber(
-            'gopher_ros_slearcore/chest_position',  #change
-            Position,
-            self.__Chest_Pos_callback,
-        )
-
-        rospy.Subscriber(
             '/chest_position',
             Point,
             self.__Chest_Pos_callback,
         )
 
         rospy.Subscriber(
-            '/current_acc',
+            '/fetch/current_motion_parameters',
             Float64MultiArray,
-            self.__current_acc_callback,
+            self.__current_motion_parameters_callback,
         )
 
         rospy.Subscriber(
             f'/{self.CONTROLLER_SIDE}/controller_feedback/joystick',
             ControllerJoystick,
             self.__oculus_joystick_callback,
+        )
+
+        rospy.Subscriber(
+            'calc_com_total//com_fin_no_chest',  #change
+            Float64MultiArray,
+            self.__COM_no_chest_callback,
         )
 
     # # Dependency status callbacks:
@@ -135,18 +144,23 @@ class ZMP_Inv():
 
         self.__oculus_joystick = message
 
+    def __COM_no_chest_callback(self, message):
+        self.__Z_no_chest = message.data[0]
+
     def __COM_Total_callback(self, message):
-        self.__mass_pos_fin = [message.data[0], message.data[1], message.data[2]]
+        self.__mass_pos_fin = [
+            message.data[0], message.data[1], message.data[2]
+        ]
         self.__mass_rob = message.data[3]
 
     def __Chest_Pos_callback(self, message):
-        self.__pos_c = message.Z
+        self.__pos_c = message.z
 
-    def __current_acc_callback(self, message):
-        self.__current_linear_acc=message.data[0]
-        self.__current_rotational_acc=message.data[1]
-        self.__target_linear_velocity=message.data[2]
-        self.__current_rotational_acc=message.data[3]
+    def __current_motion_parameters_callback(self, message):
+        self.__current_linear_acc = message.data[0]
+        self.__current_rotational_acc = message.data[1]
+        self.__target_linear_velocity = message.data[2]
+        self.__current_rotational_velocity = message.data[3]
 
     # # Private methods:
     def __check_initialization(self):
@@ -252,36 +266,55 @@ class ZMP_Inv():
 
     def max_acc_calc(self, current_linear_acc):
 
-        R=math.sqrt(self.__mass_pos_fin[0]*self.__mass_pos_fin[0]+self.__mass_pos_fin[1]*self.__mass_pos_fin[1])
-        e=2.7
-        XlimLow=-0.221/e
-        YlimLow=-0.221/e
-        g=9.81
+        R = math.sqrt(
+            self.__mass_pos_fin[0] * self.__mass_pos_fin[0]
+            + self.__mass_pos_fin[1] * self.__mass_pos_fin[1]
+        )
+        e = 2.7
+        XlimLow = -0.221 / e
+        YlimLow = -0.221 / e
+        g = 9.81
+        a_c_max = 0
+        a_t_max = 0
 
-        cosa=self.__mass_pos_fin[0]/R
-        sina=self.__mass_pos_fin[1]/R
-        tga=self.__mass_pos_fin[1]/self.__mass_pos_fin[0]
-        
+        cosa = self.__mass_pos_fin[0] / R
+        sina = self.__mass_pos_fin[1] / R
+        tga = self.__mass_pos_fin[1] / self.__mass_pos_fin[0]
 
-        acc_X_max=(XlimLow*self.__mass_rob*g-self.__mass_rob*self.__mass_pos_fin[0])/(-self.__mass_rob*self.__mass_pos_fin[2])
-       
-        acc_Y_max=(YlimLow*self.__mass_rob*g-self.__mass_rob*self.__mass_pos_fin[1])/(-self.__mass_rob*self.__mass_pos_fin[2])
-      
+        acc_X_max = (
+            XlimLow * self.__mass_rob * g
+            - self.__mass_rob * self.__mass_pos_fin[0]
+        ) / (-self.__mass_rob * self.__Z_no_chest)
 
-        a_c_max=(acc_X_max-tga*acc_Y_max-current_linear_acc)/(-cosa-tga*sina)
-        a_t_max=(acc_Y_max-sina*a_c_max)/(cosa)
-        max_rot_vel=math.sqrt(a_c_max/R)
-        max_rot_acc=a_t_max/R
+        acc_Y_max = (
+            YlimLow * self.__mass_rob * g
+            - self.__mass_rob * self.__mass_pos_fin[1]
+        ) / (-self.__mass_rob * self.__Z_no_chest)
 
-        max_linea_acc=0.8*acc_X_max
+        a_c_max = (acc_X_max - tga * acc_Y_max
+                   - current_linear_acc) / (-cosa - tga * sina)
+        a_t_max = (acc_Y_max - sina * a_c_max) / (cosa)
+
+        a_c_max = abs(a_c_max)
+        a_t_max = abs(a_t_max)
+
+        max_rot_vel = math.sqrt(a_c_max / R)
+        max_rot_acc = a_t_max / R
+
+        max_linea_acc = 0.8 * acc_X_max
 
         float64_array = Float64MultiArray()
-        float64_array.data=[max_linea_acc, max_rot_acc, max_rot_vel]
+        float64_array.data = [max_linea_acc, max_rot_acc, max_rot_vel]
 
-        self.__publisher.publish(float64_array)
+        self.__max_motion_parameters.publish(float64_array)
 
-    
-    def chest_pos_calc(self, current_linear_acc, target_rot_vel, current_rot_acc):
+        #print(max_linea_acc, max_rot_acc)
+
+    def chest_pos_calc(
+        self, current_linear_acc, current_rot_vel, current_rot_acc
+    ):
+        current_rot_vel = abs(current_rot_vel)
+
         R = math.sqrt(
             self.__mass_pos_fin[0] * self.__mass_pos_fin[0]
             + self.__mass_pos_fin[1] * self.__mass_pos_fin[1]
@@ -289,12 +322,11 @@ class ZMP_Inv():
         e = 2.7
         XlimLow = -0.221 / e
         g = 9.81
-        
 
         cosa = self.__mass_pos_fin[0] / R
-        sina = self.__mass_pos_fin[1] / R  
+        sina = self.__mass_pos_fin[1] / R
 
-        # if self.__target_linear_velocity==0 and self.__target_rotational_velocity==0: 
+        # if self.__target_linear_velocity==0 and self.__target_rotational_velocity==0:
         #     self.__counter = self.__counter + 1
         #     if self.__counter > 50:
         #         self.__steady_pos = self.__pos_c
@@ -302,32 +334,51 @@ class ZMP_Inv():
         #     self.__counter=0
 
         acc_X_max_current = (
-            XlimLow * self.__mass_rob * g - self.__mass_rob * self.__mass_pos_fin[0]
+            XlimLow * self.__mass_rob * g
+            - self.__mass_rob * self.__mass_pos_fin[0]
         ) / (-self.__mass_rob * self.__mass_pos_fin[2])
 
-        a_c = R * target_rot_vel * target_rot_vel
+        if current_rot_vel < 0.01:
+            current_rot_vel = 0
+        if current_rot_acc <= (0.21 * math.radians(3600)):
+            current_rot_acc = 0
+
+        a_c = R * current_rot_vel * current_rot_vel
         a_t = R * current_rot_acc
-        acc_X_current = -a_c * cosa + a_t * sina + current_linear_acc
-        
+        acc_X_current = abs(-a_c * cosa + a_t * sina + current_linear_acc)
+        #print(a_c, a_t, current_linear_acc)
+
         #Position controller
         e_acc = acc_X_max_current - acc_X_current
         self.__abs_pos_c = self.__pos_c + e_acc * self.__p_gain
 
-        if self.__abs_pos_c>=440:
-            self.__abs_pos_c=440
+        message = Float64()
+        message.data = e_acc
+        self.__error.publish(message)
+
+        if self.__abs_pos_c >= 440:
+            self.__abs_pos_c = 440
+        elif self.__abs_pos_c <= 20:
+            self.__abs_pos_c = 20
+
+        #print(acc_X_max_current, acc_X_current)
 
     def __publish_pos(self):
 
         abs_pos_msg = Position()
-        abs_pos_msg.data.velocity = self.MAX_CHEST_VELOCITY
-        
+        abs_pos_msg.velocity = self.MAX_CHEST_VELOCITY
+
         self.__joystick_button_state_machine()
 
         if self.__control_mode == 'user_control':
-           abs_pos_msg.data.position = self.__steady_pos
+            abs_pos_msg.position = self.__steady_pos
         else:
-            abs_pos_msg.data.position = self.__abs_pos_c
-        self.__publisher_pos_rel.publish(abs_pos_msg)
+            abs_pos_msg.position = self.__abs_pos_c
+        self.__publisher_pos_abs.publish(abs_pos_msg)
+        print(np.array([
+            abs_pos_msg.position,
+            abs_pos_msg.velocity,
+        ]).round(3))
 
     def main_loop(self):
         """
@@ -341,12 +392,13 @@ class ZMP_Inv():
 
         self.max_acc_calc(self.__current_linear_acc)
 
-        self.chest_pos_calc(self.__target_linear_acc_init, self.__target_rotational_velocity, self.__current_rotational_acc)
+        self.chest_pos_calc(
+            self.__current_linear_acc,
+            self.__current_rotational_velocity,
+            self.__current_rotational_acc,
+        )
 
         self.__publish_pos()
-        
-        print(self.__control_mode)
-        
 
     def node_shutdown(self):
         """

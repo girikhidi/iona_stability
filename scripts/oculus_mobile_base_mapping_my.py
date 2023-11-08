@@ -295,7 +295,7 @@ class OculusMobileBaseMapping:
                 abs(current_velocity),
                 [
                     0,
-                    scale_reverse * self.MAX_LINEAR_SPEED * scale_speed,
+                    scale_reverse * max_speed * scale_speed,
                 ],
                 [
                     min_acc,

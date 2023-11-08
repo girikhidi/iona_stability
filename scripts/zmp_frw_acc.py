@@ -8,26 +8,22 @@ from std_msgs.msg import (Float64MultiArray, Bool)
 import math
 
 
-class ZMP_Forw():
+class zmp_forw():
     """
     
     """
 
-    def __init__(
-        self 
-    ):
+    def __init__(self):
         """
         
         """
 
         # # Private constants:
-        self.NODE_NAME='zmp_forw_acc'
-        self.acc_x=0
-        self.acc_y=0
-        self.Mass_pos_fin=[0,0,0]
-        self.Mass_rob=0
-        self.MAX_LINEAR_SPEED=0.5
-        self.__current_linear_acc=0
+        self.NODE_NAME = 'zmp_forw_acc'
+        self.MAX_LINEAR_SPEED = 0.5
+        self.__robot_total_mass = [0.001, 0.001, 0.001]
+        self.__total_mass_robot = 130
+        self.__current_linear_acceleration = 0
 
         # # Initialization and dependency status topics:
         self.__is_initialized = False
@@ -56,29 +52,24 @@ class ZMP_Forw():
         }
 
         # # Topic publisher:
-        #Change 
-        self.__publisher = rospy.Publisher(
-            '/zmp_acc_max',
+        self.__max_motion_parameters = rospy.Publisher(
+            '/fetch/max_motion_parameters',
             Float64MultiArray,
             queue_size=1,
         )
 
         # # Topic subscriber:
-
         rospy.Subscriber(
-             'calc_com_total/com_fin', #change
+            '/calc_com_total/com_fin',  #change
             Float64MultiArray,
-            self.__COM_Total_callback,
-        )
-        
-        rospy.Subscriber(
-            '/current_acc',
-            Float64MultiArray,
-            self.__current_acc_callback,
+            self.__center_of_mass_robot_callback,
         )
 
-
-
+        rospy.Subscriber(
+            '/fetch/current_motion_parameters',
+            Float64MultiArray,
+            self.__current_motion_parameters_callback,
+        )
 
     # # Dependency status callbacks:
     # NOTE: each dependency topic should have a callback function, which will
@@ -90,15 +81,13 @@ class ZMP_Forw():
 
         self.__dependency_status['dependency_node_name'] = message.data
 
-
-
     # # Topic callbacks:
-    def __current_acc_callback(self, message):
-        self.__current_linear_acc=message.data[0]
-    
-    def __COM_Total_callback(self, message):
-        self.Mass_pos_fin=[message.data[0], message.data[1], message.data[2]]
-        self.Mass_rob=message.data[3]
+    def __current_motion_parameters_callback(self, message):
+        self.__current_linear_acceleration = message.data[0]
+
+    def __center_of_mass_robot_callback(self, message):
+        self.__robot_total_mass = [message.data[0], message.data[1], message.data[2]]
+        self.__total_mass_robot = message.data[3]
 
     # # Private methods:
     def __check_initialization(self):
@@ -168,36 +157,49 @@ class ZMP_Forw():
 
         self.__node_is_initialized.publish(self.__is_initialized)
 
-    # # Public methods:   
-    def max_acc_calc(self, current_linear_acc): #deal with target acc
-        R=math.sqrt(self.Mass_pos_fin[0]*self.Mass_pos_fin[0]+self.Mass_pos_fin[1]*self.Mass_pos_fin[1])
-        e=2.7
-        XlimLow=-0.221/e
-        YlimLow=-0.221/e
-        g=9.81
+    # # Public methods:
+    def max_acc_calc(self, current_linear_acc):  #deal with target acc
+        center_of_mass_distance_to_origin = math.sqrt(
+            self.__robot_total_mass[0] * self.__robot_total_mass[0]
+            + self.__robot_total_mass[1] * self.__robot_total_mass[1]
+        )
+        e = 2.7
+        x_limit_coordinate = -0.221 / e
+        y_limit_coordinate = -0.221 / e
+        g = 9.81
+        acc_centrifugal_max = 0
+        acc_tangential_max = 0
 
-        cosa=self.Mass_pos_fin[0]/R
-        sina=self.Mass_pos_fin[1]/R
-        tga=self.Mass_pos_fin[1]/self.Mass_pos_fin[0]
-        
+        cosa = self.__robot_total_mass[0] / center_of_mass_distance_to_origin
+        sina = self.__robot_total_mass[1] / center_of_mass_distance_to_origin
+        tga = self.__robot_total_mass[1] / self.__robot_total_mass[0]
 
-        acc_X_max=(XlimLow*self.Mass_rob*g-self.Mass_rob*self.Mass_pos_fin[0])/(-self.Mass_rob*self.Mass_pos_fin[2])
-       
-        acc_Y_max=(YlimLow*self.Mass_rob*g-self.Mass_rob*self.Mass_pos_fin[1])/(-self.Mass_rob*self.Mass_pos_fin[2])
-      
+        acc_x_axis_max = (
+            x_limit_coordinate * self.__total_mass_robot * g - self.__total_mass_robot * self.__robot_total_mass[0]
+        ) / (-self.__total_mass_robot * self.__robot_total_mass[2])
 
-        a_c_max=(acc_X_max-tga*acc_Y_max-current_linear_acc)/(-cosa-tga*sina)
-        a_t_max=(acc_Y_max-sina*a_c_max)/(cosa)
-        max_rot_vel=math.sqrt(a_c_max/R)
-        max_rot_acc=a_t_max/R
+        acc_y_axis_max = (
+            y_limit_coordinate * self.__total_mass_robot * g - self.__total_mass_robot * self.__robot_total_mass[1]
+        ) / (-self.__total_mass_robot * self.__robot_total_mass[2])
 
-        max_linea_acc=0.8*acc_X_max
+        acc_centrifugal_max = (acc_x_axis_max - tga * acc_y_axis_max
+                   - current_linear_acc) / (-cosa - tga * sina)
+
+        acc_tangential_max = (acc_y_axis_max - sina * acc_centrifugal_max) / (cosa)
+
+        acc_centrifugal_max = abs(acc_centrifugal_max)
+        acc_tangential_max = abs(acc_tangential_max)
+
+        max_rotation_velocity = math.sqrt(acc_centrifugal_max / center_of_mass_distance_to_origin)
+        max_rototation_acceleration = acc_tangential_max / center_of_mass_distance_to_origin
+
+        max_linear_acceleration = 0.8 * acc_x_axis_max
 
         float64_array = Float64MultiArray()
-        float64_array.data=[max_linea_acc, max_rot_acc, max_rot_vel]
+        float64_array.data = [max_linear_acceleration, max_rototation_acceleration, max_rotation_velocity]
 
-        self.__publisher.publish(float64_array)
-    
+        self.__max_motion_parameters.publish(float64_array)
+
     def main_loop(self):
         """
         
@@ -207,9 +209,9 @@ class ZMP_Forw():
 
         if not self.__is_initialized:
             return
-        
-        self.max_acc_calc(self.__current_linear_acc)
-        
+
+        self.max_acc_calc(self.__current_linear_acceleration)
+
     def node_shutdown(self):
         """
         
@@ -233,7 +235,7 @@ def main():
     # This name is replaced when a launch file is used.
     rospy.init_node('zmp_forw_acc')
 
-    class_instance = ZMP_Forw()
+    class_instance = zmp_forw()
 
     rospy.on_shutdown(class_instance.node_shutdown)
 

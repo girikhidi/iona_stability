@@ -57,8 +57,6 @@ class OculusMobileBaseMapping:
         self.__target_rotation_velocity = 0.0
         self.__target_linear_acc = 0.0
         self.__target_rotation_acc = 0.0
-        self.__scale_linear_speed=5
-        self.__scale_rotation_speed=5
         self.__scale_linear_reverse=0.5
         self.__scale_rotation_reverse=1
 
@@ -271,32 +269,16 @@ class OculusMobileBaseMapping:
         ):
             self.__joystick_button_state = 0
 
-    def __acc_calc(self, current_velocity, max_speed, max_acc, min_acc, scale_speed, scale_reverse):
+    def __acc_calc(self, current_velocity, max_speed, max_acc, min_acc, scale_reverse):
 
         if current_velocity > 0:
-            current_acc = np.interp(
-                abs(current_velocity),
-                [
-                    0.0,
-                   max_speed * scale_speed,
-                ],
-                [
-                    min_acc,
-                    max_acc,
-                ],
-            )
+
+            k = math.log(max_acc / min_acc) / max_speed
+            current_acc = min_acc * np.exp(k * current_velocity)
+
         elif current_velocity < 0:
-            current_acc = np.interp(
-                abs(current_velocity),
-                [
-                    0,
-                    scale_reverse * self.MAX_LINEAR_SPEED * scale_speed,
-                ],
-                [
-                    min_acc,
-                    scale_reverse * max_acc,
-                ],
-            )
+            k = math.log((max_acc*scale_reverse) / min_acc) / (max_speed*scale_reverse)
+            current_acc = min_acc * np.exp(k * abs(current_velocity))
         else:
             current_acc = min_acc
         
@@ -325,7 +307,6 @@ class OculusMobileBaseMapping:
             self.MAX_LINEAR_SPEED,
             0.8*self.MAX_LINEAR_ACCELERATION,
             self.MIN_LINEAR_ACCELERATION,
-            self.__scale_linear_speed,
             self.__scale_linear_reverse,
         )
 
@@ -334,7 +315,6 @@ class OculusMobileBaseMapping:
             self.MAX_ROTATION_SPEED,
             self.MAX_ROTATION_ACCELERATION,
             self.MIN_ROTATION_ACCELERATION,
-            self.__scale_rotation_speed,
             self.__scale_rotation_reverse,
         )
 
