@@ -47,6 +47,9 @@ class zmp_inv():
         self.__control_mode = 'autonomy_control'
         self.__z_coordinate_center_of_mass_chest_bottom=0.5
         self.__center_of_mass_distance_to_origin=0.001
+        self.__max_linear_acceleration=0.5
+        self.__max_rotation_acceleration=30
+        self.__max_rotation_velocity=60
 
         # # Initialization and dependency status topics:
         self.__is_initialized = False
@@ -306,13 +309,13 @@ class zmp_inv():
         acc_tangential_max = (acc_y_axis_max - sina * acc_centrifugal_max) / (cosa)
         acc_centrifugal_max = abs(acc_centrifugal_max)
         acc_tangential_max = abs(acc_tangential_max)
-        max_rotation_velocity = math.sqrt(acc_centrifugal_max / self.__center_of_mass_distance_to_origin)
+        self.__max_rotation_velocity = math.sqrt(acc_centrifugal_max / self.__center_of_mass_distance_to_origin)
 
-        max_rotation_acceleration = acc_tangential_max / self.__center_of_mass_distance_to_origin
-        max_linear_acceleration = 0.8 * acc_x_axis_max
+        self.__max_rotation_acceleration = acc_tangential_max / self.__center_of_mass_distance_to_origin
+        self.__max_linear_acceleration = 0.8 * acc_x_axis_max
 
         float64_array = Float64MultiArray()
-        float64_array.data = [max_linear_acceleration, max_rotation_acceleration, max_rotation_velocity]
+        float64_array.data = [self.__max_linear_acceleration, self.__max_rotation_acceleration,  self.__max_rotation_velocity]
 
         self.__max_motion_parameters.publish(float64_array)
 
@@ -338,7 +341,7 @@ class zmp_inv():
 
         if current_rotational_velocity < 0.01:
             current_rotational_velocity = 0
-        if current_rotational_acceleration <= (0.21 * math.radians(3600)):
+        if current_rotational_acceleration <= (0.21 * self.__max_rotation_velocity):
             current_rotational_acceleration = 0
 
         acc_centrifugal_current = self.__center_of_mass_distance_to_origin * current_rotational_velocity * current_rotational_velocity

@@ -160,7 +160,7 @@ class OculusMobileBaseMapping:
             * self.MAX_LINEAR_SPEED_ACCELERATION_RATIO
         )
         self.__max_rotation_acceleration = message.data[1]
-        # self.__max_rotation_speed = message.data[2]
+        self.__max_rotation_speed = message.data[2]
 
     ## Timer functions:
     # def __set_target_velocities_accelerations_timer(self, event):
