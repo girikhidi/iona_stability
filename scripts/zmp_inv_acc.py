@@ -19,7 +19,7 @@ from oculus_ros.msg import (
 )
 
 
-class ZMP_Inv():
+class zmp_inv():
     """
     
     """
@@ -31,23 +31,22 @@ class ZMP_Inv():
 
         # # Private constants:
         self.NODE_NAME = 'zmp_inv'
+        self.CONTROLLER_SIDE = 'left'
         self.MAX_CHEST_VELOCITY = 0.5
-        self.__mass_pos_fin = [0.001, 0.001, 0.001]
+        self.__center_of_mass_robot = [0.001, 0.001, 0.001]
         self.__mass_rob = 130
-        self.__pos_c = 0
-        self.__counter = 0
-        self.__steady_pos = 440
-        self.__abs_pos_c = self.__pos_c
-        self.__current_linear_acc = 0
-        self.__current_rotational_acc = 0
+        self.__position_chest = 0
+        self.__steady_position = 440
+        self.__absolute_chest_position = self.__position_chest
+        self.__current_linear_acceleration = 0
+        self.__current_rotational_acceleration = 0
         self.__current_rotational_velocity = 0
-        self.__target_linear_velocity = 0
         self.__p_gain = 0.5
         self.__oculus_joystick = ControllerJoystick()
         self.__joystick_button_state = 0
         self.__control_mode = 'autonomy_control'
-        self.CONTROLLER_SIDE = 'left'
-        self.__Z_no_chest = 0.5
+        self.__z_coordinate_center_of_mass_chest_bottom=0.5
+        self.__center_of_mass_distance_to_origin=0.001
 
         # # Initialization and dependency status topics:
         self.__is_initialized = False
@@ -99,7 +98,7 @@ class ZMP_Inv():
         rospy.Subscriber(
             'calc_com_total/com_fin',  #change
             Float64MultiArray,
-            self.__COM_Total_callback,
+            self.__center_of_mass_robot_callback,
         )
 
         rospy.Subscriber(
@@ -121,9 +120,9 @@ class ZMP_Inv():
         )
 
         rospy.Subscriber(
-            'calc_com_total//com_fin_no_chest',  #change
+            '/calc_com_total/com_fin_no_chest',  #change
             Float64MultiArray,
-            self.__COM_no_chest_callback,
+            self.__z_coordinate_chest_bottom_position_callback,
         )
 
     # # Dependency status callbacks:
@@ -144,22 +143,21 @@ class ZMP_Inv():
 
         self.__oculus_joystick = message
 
-    def __COM_no_chest_callback(self, message):
-        self.__Z_no_chest = message.data[0]
+    def __z_coordinate_chest_bottom_position_callback(self, message):
+        self.__z_coordinate_center_of_mass_chest_bottom = message.data[0]
 
-    def __COM_Total_callback(self, message):
-        self.__mass_pos_fin = [
+    def __center_of_mass_robot_callback(self, message):
+        self.__center_of_mass_robot = [
             message.data[0], message.data[1], message.data[2]
         ]
         self.__mass_rob = message.data[3]
 
     def __Chest_Pos_callback(self, message):
-        self.__pos_c = message.z
+        self.__position_chest = message.z
 
     def __current_motion_parameters_callback(self, message):
-        self.__current_linear_acc = message.data[0]
-        self.__current_rotational_acc = message.data[1]
-        self.__target_linear_velocity = message.data[2]
+        self.__current_linear_acceleration = message.data[0]
+        self.__current_rotational_acceleration = message.data[1]
         self.__current_rotational_velocity = message.data[3]
 
     # # Private methods:
@@ -264,104 +262,102 @@ class ZMP_Inv():
         ):
             self.__joystick_button_state = 0
 
-    def max_acc_calc(self, current_linear_acc):
+    def max_acc_calc( self, current_linear_acceleration, ):
 
-        R = math.sqrt(
-            self.__mass_pos_fin[0] * self.__mass_pos_fin[0]
-            + self.__mass_pos_fin[1] * self.__mass_pos_fin[1]
-        )
         e = 2.7
-        XlimLow = -0.221 / e
-        YlimLow = -0.221 / e
         g = 9.81
-        a_c_max = 0
-        a_t_max = 0
+        x_limit_coordinate = -0.221 / e
+        y_limit_coordinate = 0.221 / e
+        acc_centrifugal_max = 0
+        acc_tangential_max = 0
 
-        cosa = self.__mass_pos_fin[0] / R
-        sina = self.__mass_pos_fin[1] / R
-        tga = self.__mass_pos_fin[1] / self.__mass_pos_fin[0]
+        self.__center_of_mass_distance_to_origin = math.sqrt(
+            self.__center_of_mass_robot[0] * self.__center_of_mass_robot[0]
+            + self.__center_of_mass_robot[1] * self.__center_of_mass_robot[1]
+        )
+        
+        cosa = self.__center_of_mass_robot[0] / self.__center_of_mass_distance_to_origin
+        sina = self.__center_of_mass_robot[1] / self.__center_of_mass_distance_to_origin
+        tga = self.__center_of_mass_robot[1] / self.__center_of_mass_robot[0]
 
-        acc_X_max = (
-            XlimLow * self.__mass_rob * g
-            - self.__mass_rob * self.__mass_pos_fin[0]
-        ) / (-self.__mass_rob * self.__Z_no_chest)
+        acc_x_axis_max = (
+            x_limit_coordinate * self.__mass_rob * g
+            - self.__mass_rob * self.__center_of_mass_robot[0] * g
+        ) / (-self.__mass_rob * self.__z_coordinate_center_of_mass_chest_bottom)
 
-        acc_Y_max = (
-            YlimLow * self.__mass_rob * g
-            - self.__mass_rob * self.__mass_pos_fin[1]
-        ) / (-self.__mass_rob * self.__Z_no_chest)
+        acc_y_axis_max = (
+            y_limit_coordinate * self.__mass_rob * g
+            - self.__mass_rob * self.__center_of_mass_robot[1] * g
+        ) / (-self.__mass_rob * self.__z_coordinate_center_of_mass_chest_bottom)
 
-        a_c_max = (acc_X_max - tga * acc_Y_max
-                   - current_linear_acc) / (-cosa - tga * sina)
-        a_t_max = (acc_Y_max - sina * a_c_max) / (cosa)
+        # Chanage the sighn of centrifugal acceleration in x component
+        # acc_centrifugal_max = (acc_x_axis_max - tga * acc_y_axis_max
+        #            - current_linear_acceleration) / (cosa - tga * sina)
 
-        a_c_max = abs(a_c_max)
-        a_t_max = abs(a_t_max)
+        # No centrifugal acc tangential calculation
+        # max_rotation_velocity=0
+        # acc_tangential_max=math.sqrt(pow((acc_x_axis_max-current_linear_acceleration), 2)+pow(acc_y_axis_max, 2))
+  
+        # Original
+        acc_centrifugal_max = (acc_x_axis_max - tga * acc_y_axis_max
+                   - current_linear_acceleration) / (-cosa - tga * sina)
 
-        max_rot_vel = math.sqrt(a_c_max / R)
-        max_rot_acc = a_t_max / R
+        # Tangential calculation
+        acc_tangential_max = (acc_y_axis_max - sina * acc_centrifugal_max) / (cosa)
+        acc_centrifugal_max = abs(acc_centrifugal_max)
+        acc_tangential_max = abs(acc_tangential_max)
+        max_rotation_velocity = math.sqrt(acc_centrifugal_max / self.__center_of_mass_distance_to_origin)
 
-        max_linea_acc = 0.8 * acc_X_max
+        max_rotation_acceleration = acc_tangential_max / self.__center_of_mass_distance_to_origin
+        max_linear_acceleration = 0.8 * acc_x_axis_max
 
         float64_array = Float64MultiArray()
-        float64_array.data = [max_linea_acc, max_rot_acc, max_rot_vel]
+        float64_array.data = [max_linear_acceleration, max_rotation_acceleration, max_rotation_velocity]
 
         self.__max_motion_parameters.publish(float64_array)
 
         #print(max_linea_acc, max_rot_acc)
 
     def chest_pos_calc(
-        self, current_linear_acc, current_rot_vel, current_rot_acc
+        self, current_linear_acceleration, current_rotational_velocity, current_rotational_acceleration
     ):
-        current_rot_vel = abs(current_rot_vel)
-
-        R = math.sqrt(
-            self.__mass_pos_fin[0] * self.__mass_pos_fin[0]
-            + self.__mass_pos_fin[1] * self.__mass_pos_fin[1]
-        )
         e = 2.7
-        XlimLow = -0.221 / e
         g = 9.81
+        x_limit_coordinate = -0.221 / e
+        y_limit_coordinate = 0.221 / e
+        acc_centrifugal_current=0
+        current_rotational_velocity = abs(current_rotational_velocity)
 
-        cosa = self.__mass_pos_fin[0] / R
-        sina = self.__mass_pos_fin[1] / R
+        cosa = self.__center_of_mass_robot[0] / self.__center_of_mass_distance_to_origin
+        sina = self.__center_of_mass_robot[1] / self.__center_of_mass_distance_to_origin
 
-        # if self.__target_linear_velocity==0 and self.__target_rotational_velocity==0:
-        #     self.__counter = self.__counter + 1
-        #     if self.__counter > 50:
-        #         self.__steady_pos = self.__pos_c
-        # else:
-        #     self.__counter=0
+        acc_x_axis_max_current = (
+            x_limit_coordinate * self.__mass_rob * g
+            - self.__mass_rob * self.__center_of_mass_robot[0] * g
+        ) / (-self.__mass_rob * self.__center_of_mass_robot[2])  
 
-        acc_X_max_current = (
-            XlimLow * self.__mass_rob * g
-            - self.__mass_rob * self.__mass_pos_fin[0]
-        ) / (-self.__mass_rob * self.__mass_pos_fin[2])
+        if current_rotational_velocity < 0.01:
+            current_rotational_velocity = 0
+        if current_rotational_acceleration <= (0.21 * math.radians(3600)):
+            current_rotational_acceleration = 0
 
-        if current_rot_vel < 0.01:
-            current_rot_vel = 0
-        if current_rot_acc <= (0.21 * math.radians(3600)):
-            current_rot_acc = 0
-
-        a_c = R * current_rot_vel * current_rot_vel
-        a_t = R * current_rot_acc
-        acc_X_current = abs(-a_c * cosa + a_t * sina + current_linear_acc)
-        #print(a_c, a_t, current_linear_acc)
+        acc_centrifugal_current = self.__center_of_mass_distance_to_origin * current_rotational_velocity * current_rotational_velocity
+        acc_tangential_current = self.__center_of_mass_distance_to_origin * current_rotational_acceleration
+        acc_x_axis_current = -acc_centrifugal_current * cosa + acc_tangential_current * sina + current_linear_acceleration # - centr may change to +
 
         #Position controller
-        e_acc = acc_X_max_current - acc_X_current
-        self.__abs_pos_c = self.__pos_c + e_acc * self.__p_gain
+        e_acc = acc_x_axis_max_current - acc_x_axis_current
+        self.__absolute_chest_position = self.__position_chest + e_acc * self.__p_gain
 
         message = Float64()
         message.data = e_acc
         self.__error.publish(message)
 
-        if self.__abs_pos_c >= 440:
-            self.__abs_pos_c = 440
-        elif self.__abs_pos_c <= 20:
-            self.__abs_pos_c = 20
+        if self.__absolute_chest_position >= 440:
+            self.__absolute_chest_position = 440
+        elif self.__absolute_chest_position <= 20:
+            self.__absolute_chest_position = 20
 
-        #print(acc_X_max_current, acc_X_current)
 
     def __publish_pos(self):
 
@@ -371,9 +367,9 @@ class ZMP_Inv():
         self.__joystick_button_state_machine()
 
         if self.__control_mode == 'user_control':
-            abs_pos_msg.position = self.__steady_pos
+            abs_pos_msg.position = self.__steady_position
         else:
-            abs_pos_msg.position = self.__abs_pos_c
+            abs_pos_msg.position = self.__absolute_chest_position
         self.__publisher_pos_abs.publish(abs_pos_msg)
         print(np.array([
             abs_pos_msg.position,
@@ -390,12 +386,12 @@ class ZMP_Inv():
         if not self.__is_initialized:
             return
 
-        self.max_acc_calc(self.__current_linear_acc)
+        self.max_acc_calc(self.__current_linear_acceleration)
 
         self.chest_pos_calc(
-            self.__current_linear_acc,
+            self.__current_linear_acceleration,
             self.__current_rotational_velocity,
-            self.__current_rotational_acc,
+            self.__current_rotational_acceleration,
         )
 
         self.__publish_pos()
@@ -423,7 +419,7 @@ def main():
     # This name is replaced when a launch file is used.
     rospy.init_node('zmp_inv')
 
-    class_instance = ZMP_Inv()
+    class_instance = zmp_inv()
 
     rospy.on_shutdown(class_instance.node_shutdown)
 

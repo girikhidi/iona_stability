@@ -7,6 +7,7 @@ import rospy
 import math
 import numpy as np
 
+from std_msgs.msg import (Float64MultiArray)
 from geometry_msgs.msg import (Twist)
 
 from oculus_ros.msg import (
@@ -22,11 +23,12 @@ class OculusMobileBaseMapping:
 
     def __init__(
         self,
-        controller_side='left',
-        max_linear_speed=0.5,  # Meters/second.
+        controller_side='right',
+        max_linear_speed_acceleration_ratio=0.5,
         max_rotation_speed=60,  # Degrees/seconds.
-        max_linear_acceleration=5,  # Meters/second^2.
-        max_rotation_acceleration=1800,  # Degrees/second^2.
+        max_linear_acceleration=1.0,  # Meters/second^2.
+        max_rotation_acceleration=3600,  # Degrees/second^2.
+        reverse_linear_speed_scale=0.5,
     ):
         """
         
@@ -37,32 +39,43 @@ class OculusMobileBaseMapping:
         # # Public constants:
         self.CONTROLLER_SIDE = controller_side
 
-        self.MAX_LINEAR_SPEED = max_linear_speed
-        self.MAX_ROTATION_SPEED = math.radians(max_rotation_speed)
-
+        # Max linear velocities and accelerations:
         self.MIN_LINEAR_ACCELERATION = 0.1
         self.MAX_LINEAR_ACCELERATION = max_linear_acceleration
 
-        self.MIN_ROTATION_ACCELERATION = (
-            0.2 * math.radians(max_rotation_acceleration)
+        self.MAX_LINEAR_SPEED_ACCELERATION_RATIO = (
+            max_linear_speed_acceleration_ratio
         )
+        self.MAX_LINEAR_SPEED = (
+            self.MAX_LINEAR_SPEED_ACCELERATION_RATIO
+            * self.MAX_LINEAR_ACCELERATION
+        )
+        self.REVERSE_LINEAR_SPEED_SCALE = reverse_linear_speed_scale
+
+        # Max rotation velocities and accelerations:
+        self.MAX_ROTATION_SPEED = math.radians(max_rotation_speed)
+
         self.MAX_ROTATION_ACCELERATION = math.radians(max_rotation_acceleration)
+        self.MIN_ROTATION_ACCELERATION = (0.2 * self.MAX_ROTATION_ACCELERATION)
 
         # # Private variables:
         self.__oculus_joystick = ControllerJoystick()
         self.__oculus_buttons = ControllerButtons()
 
+        # Max velocities and accelerations:
+        self.__max_linear_speed = self.MAX_LINEAR_SPEED
+        self.__max_linear_acceleration = self.MAX_LINEAR_ACCELERATION
+
+        self.__max_rotation_speed = self.MAX_ROTATION_SPEED
+        self.__max_rotation_acceleration = self.MAX_ROTATION_ACCELERATION
+
         # Set target velocities.
         self.__target_linear_velocity = 0.0
         self.__target_rotation_velocity = 0.0
-        self.__target_linear_acc = 0.0
-        self.__target_rotation_acc = 0.0
-        self.__scale_linear_reverse=0.5
-        self.__scale_rotation_reverse=1
 
         # Calculated accelerations based on the joystick input.
         self.__current_linear_acceleration = self.MIN_LINEAR_ACCELERATION
-        self.__current_rotation_acceleration = self.MAX_ROTATION_ACCELERATION
+        self.__current_rotation_acceleration = self.MIN_ROTATION_ACCELERATION
 
         # Calculated velocities based on the acceleration algorithm.
         self.__current_linear_velocity = 0.0
@@ -72,8 +85,6 @@ class OculusMobileBaseMapping:
 
         self.__joystick_button_state = 0
         self.__control_mode = 'full'
-
-        # Test zone:
 
         # # Public variables:
 
@@ -89,6 +100,11 @@ class OculusMobileBaseMapping:
             Twist,
             queue_size=1,
         )
+        self.__current_motion_parameters = rospy.Publisher(
+            '/fetch/current_motion_parameters',
+            Float64MultiArray,
+            queue_size=1,
+        )
 
         # # Topic subscriber:
         rospy.Subscriber(
@@ -101,12 +117,17 @@ class OculusMobileBaseMapping:
             ControllerButtons,
             self.__oculus_buttons_callback,
         )
+        rospy.Subscriber(
+            f'/fetch/max_motion_parameters',
+            Float64MultiArray,
+            self.__max_motion_parameters_callback,
+        )
 
         # # Timer:
-        rospy.Timer(
-            rospy.Duration(1.0 / 10.0),
-            self.__set_target_velocities_accelerations_timer,
-        )
+        # rospy.Timer(
+        #     rospy.Duration(1.0 / 10.0),
+        #     self.__set_target_velocities_accelerations_timer,
+        # )
 
     # # Service handlers:
 
@@ -125,13 +146,29 @@ class OculusMobileBaseMapping:
 
         self.__oculus_buttons = message
 
-    ## Timer functions:
-    def __set_target_velocities_accelerations_timer(self, event):
+    def __max_motion_parameters_callback(self, message):
         """
+        0 - max linear accelration,
+        1 - max rotation acceleration,
+        2 - max rotation velocity.
         
         """
 
-        self.__set_target_velocities_accelerations()
+        self.__max_linear_acceleration = message.data[0]
+        self.__max_linear_speed = (
+            self.__max_linear_acceleration
+            * self.MAX_LINEAR_SPEED_ACCELERATION_RATIO
+        )
+        self.__max_rotation_acceleration = message.data[1]
+        # self.__max_rotation_speed = message.data[2]
+
+    ## Timer functions:
+    # def __set_target_velocities_accelerations_timer(self, event):
+    #     """
+        
+    #     """
+
+    #     self.__set_target_velocities_accelerations()
 
     # # Private methods:
     def __check_dead_zones(self):
@@ -195,18 +232,24 @@ class OculusMobileBaseMapping:
             self.__target_linear_velocity = np.interp(
                 round(updated_joystick[1], 4),
                 [-1.0, 1.0],
-                [-self.MAX_LINEAR_SPEED, self.MAX_LINEAR_SPEED],
+                [-self.__max_linear_speed, self.__max_linear_speed],
             )
 
-            if self.__target_linear_velocity <= -0.5 * self.MAX_LINEAR_SPEED:
-                self.__target_linear_velocity = -0.5 * self.MAX_LINEAR_SPEED
+            # Limit backward motion speed.
+            if (
+                self.__target_linear_velocity <=
+                -self.REVERSE_LINEAR_SPEED_SCALE * self.__max_linear_speed
+            ):
+                self.__target_linear_velocity = (
+                    -self.REVERSE_LINEAR_SPEED_SCALE * self.__max_linear_speed
+                )
 
         if abs(self.__oculus_joystick.position_x) > 0.01:  # Noisy joystick.
             # Rotation velocity.
             self.__target_rotation_velocity = np.interp(
                 round(updated_joystick[0], 4),
                 [-1.0, 1.0],
-                [self.MAX_ROTATION_SPEED, -self.MAX_ROTATION_SPEED],
+                [-self.__max_rotation_speed, self.__max_rotation_speed],
             )
 
     def __update_velocity(
@@ -235,6 +278,51 @@ class OculusMobileBaseMapping:
             current_velocity = target_velocity
 
         return current_velocity
+
+    def __update_acceleration(
+        self,
+        current_velocity,
+        max_speed,
+        max_acceleration,
+        min_acceleration,
+    ):
+        """
+        Maps acceleration to velocity: the bigger the velocity, the bigger the 
+        acceleration.
+        
+        """
+
+        if current_velocity > 0:
+            current_acceleration = np.interp(
+                abs(current_velocity),
+                [
+                    0.0,
+                    max_speed,
+                ],
+                [
+                    min_acceleration,
+                    max_acceleration,
+                ],
+            )
+
+        elif current_velocity < 0:
+            current_acceleration = np.interp(
+                abs(current_velocity),
+                [
+                    0.0,
+                    max_speed,
+                ],
+                [
+                    min_acceleration,
+                    max_acceleration,
+                ],
+            )
+
+        # Stop:
+        else:
+            current_acceleration = min_acceleration
+
+        return current_acceleration
 
     def __joystick_button_state_machine(self):
         """
@@ -269,58 +357,7 @@ class OculusMobileBaseMapping:
         ):
             self.__joystick_button_state = 0
 
-    def __acc_calc(self, current_velocity, max_speed, max_acc, min_acc, scale_reverse):
-
-        if current_velocity > 0:
-
-            k = math.log(max_acc / min_acc) / max_speed
-            current_acc = min_acc * np.exp(k * current_velocity)
-
-        elif current_velocity < 0:
-            k = math.log((max_acc*scale_reverse) / min_acc) / (max_speed*scale_reverse)
-            current_acc = min_acc * np.exp(k * abs(current_velocity))
-        else:
-            current_acc = min_acc
-        
-        return current_acc
-
-
-    # # Public methods:
-    def main_loop(self):
-        """
-        
-        """
-
-        self.__current_linear_velocity = self.__update_velocity(
-            self.__target_linear_velocity,
-            self.__current_linear_velocity,
-            self.__current_linear_acceleration,
-        )
-        self.__current_rotation_velocity = self.__update_velocity(
-            self.__target_rotation_velocity,
-            self.__current_rotation_velocity,
-            self.__current_rotation_acceleration,
-        )
-        
-        self.__current_linear_acceleration=self.__acc_calc(
-            self.__current_linear_velocity,
-            self.MAX_LINEAR_SPEED,
-            0.8*self.MAX_LINEAR_ACCELERATION,
-            self.MIN_LINEAR_ACCELERATION,
-            self.__scale_linear_reverse,
-        )
-
-        self.__current_rotation_acceleration=self.__acc_calc(
-            self.__current_rotation_velocity,
-            self.MAX_ROTATION_SPEED,
-            self.MAX_ROTATION_ACCELERATION,
-            self.MIN_ROTATION_ACCELERATION,
-            self.__scale_rotation_reverse,
-        )
-
-        self.publish_twist_velocity()
-
-    def publish_twist_velocity(self):
+    def __publish_twist_velocities(self):
         """
         
         """
@@ -335,6 +372,60 @@ class OculusMobileBaseMapping:
             twist_message.linear.x = 0.0
 
         self.__mobilebase_twist_velocity.publish(twist_message)
+
+    def __publish_current_motion_parameters(self):
+        """
+        
+        """
+
+        message = Float64MultiArray()
+        message.data = [
+            self.__current_linear_acceleration,
+            self.__current_rotation_acceleration,
+            self.__current_linear_velocity,
+            self.__current_rotation_velocity,
+        ]
+
+        self.__current_motion_parameters.publish(message)
+
+    # # Public methods:
+    def main_loop(self):
+        """
+        
+        """
+        self.__set_target_velocities_accelerations()
+        
+        # Velocities:
+        self.__current_linear_velocity = self.__update_velocity(
+            self.__target_linear_velocity,
+            self.__current_linear_velocity,
+            self.__current_linear_acceleration,
+        )
+        self.__current_rotation_velocity = self.__update_velocity(
+            self.__target_rotation_velocity,
+            self.__current_rotation_velocity,
+            self.__current_rotation_acceleration,
+        )
+
+        # Accelerations:
+        self.__current_linear_acceleration = self.__update_acceleration(
+            self.__current_linear_velocity,
+            self.__max_linear_speed,
+            self.__max_linear_acceleration,
+            self.MIN_LINEAR_ACCELERATION,
+        )
+        self.__current_rotation_acceleration = self.__update_acceleration(
+            self.__current_rotation_velocity,
+            self.__max_rotation_speed,
+            self.__max_rotation_acceleration,
+            self.MIN_ROTATION_ACCELERATION,
+        )
+
+        # Publish calculated velocities:
+        self.__publish_twist_velocities()
+
+        # Publish acceleration algorithm feedback:
+        self.__publish_current_motion_parameters()
 
 
 def node_shutdown():
@@ -358,10 +449,7 @@ def main():
     rospy.init_node('oculus_mobile_base_mapping')
     rospy.on_shutdown(node_shutdown)
 
-    mobile_base_mapping = OculusMobileBaseMapping(
-        controller_side='right',
-        max_linear_speed=0.5,
-    )
+    mobile_base_mapping = OculusMobileBaseMapping()
 
     print('\nOculus-mobile base mapping is ready.\n')
 

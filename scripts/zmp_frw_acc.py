@@ -165,7 +165,7 @@ class zmp_forw():
         )
         e = 2.7
         x_limit_coordinate = -0.221 / e
-        y_limit_coordinate = -0.221 / e
+        y_limit_coordinate = 0.221 / e
         g = 9.81
         acc_centrifugal_max = 0
         acc_tangential_max = 0
@@ -175,11 +175,11 @@ class zmp_forw():
         tga = self.__robot_total_mass[1] / self.__robot_total_mass[0]
 
         acc_x_axis_max = (
-            x_limit_coordinate * self.__total_mass_robot * g - self.__total_mass_robot * self.__robot_total_mass[0]
+            x_limit_coordinate * self.__total_mass_robot * g - self.__total_mass_robot * self.__robot_total_mass[0]*g
         ) / (-self.__total_mass_robot * self.__robot_total_mass[2])
 
         acc_y_axis_max = (
-            y_limit_coordinate * self.__total_mass_robot * g - self.__total_mass_robot * self.__robot_total_mass[1]
+            y_limit_coordinate * self.__total_mass_robot * g - self.__total_mass_robot * self.__robot_total_mass[1]*g
         ) / (-self.__total_mass_robot * self.__robot_total_mass[2])
 
         acc_centrifugal_max = (acc_x_axis_max - tga * acc_y_axis_max

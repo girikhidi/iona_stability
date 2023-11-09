@@ -8,7 +8,7 @@ from std_msgs.msg import (Float64MultiArray, Bool)
 from math import sqrt
 from  sensor_msgs.msg import (Imu)
 
-class ZMP_simple():
+class zmp_simple():
     """
     
     """
@@ -21,14 +21,13 @@ class ZMP_simple():
         """
 
         # # Private constants:
-        self.NODE_NAME='ZMP_simple'
-        self.acc_x=0
-        self.acc_y=0
-        self.Mass_pos_fin=[0,0,0]
-        self.Mass_rob=0
+        self.NODE_NAME='zmp_simple'
+        self.__imu_acc_x_axis=0
+        self.__imu_acc_y_axis=0
+        self.__center_of_mass_robot=[0.001,0.001,0.001]
+        self.__mass_robot=131
         self.__flag=0
         self.__count=0
-        self.__flag_cross=0
 
         # # Initialization and dependency status topics:
         self.__is_initialized = False
@@ -61,15 +60,15 @@ class ZMP_simple():
 
         # # Topic subscriber:
         rospy.Subscriber(
-            'MyBase/imu1', #change
+            '/fetch/imu1', #change
             Imu,
-            self.__IMU_callback,
+            self.__imu_base_callback,
         )
 
         rospy.Subscriber(
             'calc_com_total/com_fin', #change
             Float64MultiArray,
-            self.__COM_Total_callback,
+            self.__center_of_mass_robot_callback,
         )
 
 
@@ -88,13 +87,13 @@ class ZMP_simple():
 
     # # Topic callbacks:
 
-    def __IMU_callback(self, message):
-        self.acc_x = message.linear_acceleration[0]
-        self.acc_y = message.linear_acceleration[1]
+    def __imu_base_callback(self, message):
+        self.__imu_acc_x_axis = message.linear_acceleration[0]
+        self.__imu_acc_y_axis = message.linear_acceleration[1]
     
-    def __COM_Total_callback(self, message):
-        self.Mass_pos_fin=[message.data[0], message.data[1], message.data[2]]
-        self.Mass_rob=message.data[3]
+    def __center_of_mass_robot_callback(self, message):
+        self.__center_of_mass_robot=[message.data[0], message.data[1], message.data[2]]
+        self.__mass_robot=message.data[3]
         
  
 
@@ -168,23 +167,25 @@ class ZMP_simple():
 
     # # Public methods:
 
-    def zmp_ass(self):
-        acc_rob=[self.acc_x, self.acc_y, 0]
+    def __zmp_ass(self):
+        
         g=9.81
+        e = 2.7
 
-        Xz=(self.Mass_rob*(acc_rob[2]+g)*self.Mass_pos_fin[0]-self.Mass_rob*self.Mass_pos_fin[2]*acc_rob[0])/(self.Mass_rob*(acc_rob[2]+g))
-        Yz=(self.Mass_rob*(acc_rob[2]+g)*self.Mass_pos_fin[1]-self.Mass_rob*self.Mass_pos_fin[2]*acc_rob[1])/(self.Mass_rob*(acc_rob[2]+g))
+        acc_robot=[self.__imu_acc_x_axis, self.__imu_acc_y_axis, 0]
+        x_coordinate_zmp=(self.__mass_robot*(acc_robot[2]+g)*self.__center_of_mass_robot[0]-self.__mass_robot*self.__center_of_mass_robot[2]*acc_robot[0])/(self.__mass_robot*(acc_robot[2]+g))
+        y_coordinate_zmp=(self.__mass_robot*(acc_robot[2]+g)*self.__center_of_mass_robot[1]-self.__mass_robot*self.__center_of_mass_robot[2]*acc_robot[1])/(self.__mass_robot*(acc_robot[2]+g))
 
-        XlimLow=-0.221
-        YlimLow=-0.221
+        x_limit_coordinate=-0.221/e
+        y_limit_coordinate=-0.221/e
 
-        if abs(Xz)>abs(XlimLow/2.7) and abs(Yz)>abs(YlimLow/2.7):
+        if abs(x_coordinate_zmp)>abs(x_limit_coordinate) and abs(y_coordinate_zmp)>abs(y_limit_coordinate):
             self.__flag=self.__flag+1
-        elif abs(Xz)<=abs(XlimLow/2.7) and abs(Yz)>abs(YlimLow/2.7):
+        elif abs(x_coordinate_zmp)<=abs(x_limit_coordinate) and abs(y_coordinate_zmp)>abs(y_limit_coordinate):
             self.__flag=self.__flag+1
-        elif abs(Xz)>abs(XlimLow/2.7) and abs(Yz)<=abs(YlimLow/2.7):
+        elif abs(x_coordinate_zmp)>abs(x_limit_coordinate) and abs(y_coordinate_zmp)<=abs(y_limit_coordinate):
             self.__flag=self.__flag+1
-        elif abs(Xz)<=abs(XlimLow/2.7) and abs(Yz)<=abs(YlimLow/2.7):
+        elif abs(x_coordinate_zmp)<=abs(x_limit_coordinate) and abs(y_coordinate_zmp)<=abs(y_limit_coordinate):
             self.__flag=0
         
         if self.__flag==1:
@@ -204,7 +205,7 @@ class ZMP_simple():
 
         # NOTE: Add code (function calls), which has to be executed once the
         # node was successfully initialized.
-        self.zmp_ass()
+        self.__zmp_ass()
         
         
     def node_shutdown(self):
@@ -228,9 +229,9 @@ def main():
 
     # # Default node initialization.
     # This name is replaced when a launch file is used.
-    rospy.init_node('ZMP_simple')
+    rospy.init_node('zmp_simple')
 
-    class_instance = ZMP_simple()
+    class_instance = zmp_simple()
 
     rospy.on_shutdown(class_instance.node_shutdown)
 
