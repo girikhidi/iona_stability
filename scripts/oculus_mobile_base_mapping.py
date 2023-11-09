@@ -25,7 +25,7 @@ class OculusMobileBaseMapping:
         self,
         controller_side='right',
         max_linear_speed_acceleration_ratio=0.5,
-        max_rotation_speed=60,  # Degrees/seconds.
+        max_rotation_speed_acceleration_ratio=0.02,  # Degrees/seconds.
         max_linear_acceleration=1.0,  # Meters/second^2.
         max_rotation_acceleration=3600,  # Degrees/second^2.
         reverse_linear_speed_scale=0.5,
@@ -43,6 +43,10 @@ class OculusMobileBaseMapping:
         self.MIN_LINEAR_ACCELERATION = 0.1
         self.MAX_LINEAR_ACCELERATION = max_linear_acceleration
 
+        # Max rotation velocities and accelerations:
+        self.MAX_ROTATION_ACCELERATION = math.radians(max_rotation_acceleration)
+        self.MIN_ROTATION_ACCELERATION = (0.2 * self.MAX_ROTATION_ACCELERATION)
+
         self.MAX_LINEAR_SPEED_ACCELERATION_RATIO = (
             max_linear_speed_acceleration_ratio
         )
@@ -50,13 +54,17 @@ class OculusMobileBaseMapping:
             self.MAX_LINEAR_SPEED_ACCELERATION_RATIO
             * self.MAX_LINEAR_ACCELERATION
         )
+
+        self.MAX_ROTATION_SPEED_ACCELERATION_RATIO = (
+            max_rotation_speed_acceleration_ratio
+        )
+
+        self.MAX_ROTATION_SPEED = (
+            self.MAX_ROTATION_SPEED_ACCELERATION_RATIO
+            * self.MAX_ROTATION_ACCELERATION
+        )
+
         self.REVERSE_LINEAR_SPEED_SCALE = reverse_linear_speed_scale
-
-        # Max rotation velocities and accelerations:
-        self.MAX_ROTATION_SPEED = math.radians(max_rotation_speed)
-
-        self.MAX_ROTATION_ACCELERATION = math.radians(max_rotation_acceleration)
-        self.MIN_ROTATION_ACCELERATION = (0.2 * self.MAX_ROTATION_ACCELERATION)
 
         # # Private variables:
         self.__oculus_joystick = ControllerJoystick()
@@ -160,12 +168,12 @@ class OculusMobileBaseMapping:
             * self.MAX_LINEAR_SPEED_ACCELERATION_RATIO
         )
         self.__max_rotation_acceleration = message.data[1]
-        self.__max_rotation_speed = message.data[2]
+        #self.__max_rotation_speed = message.data[2]
 
     ## Timer functions:
     # def __set_target_velocities_accelerations_timer(self, event):
     #     """
-        
+
     #     """
 
     #     self.__set_target_velocities_accelerations()
@@ -249,7 +257,7 @@ class OculusMobileBaseMapping:
             self.__target_rotation_velocity = np.interp(
                 round(updated_joystick[0], 4),
                 [-1.0, 1.0],
-                [-self.__max_rotation_speed, self.__max_rotation_speed],
+                [self.__max_rotation_speed, -self.__max_rotation_speed],
             )
 
     def __update_velocity(
@@ -394,7 +402,7 @@ class OculusMobileBaseMapping:
         
         """
         self.__set_target_velocities_accelerations()
-        
+
         # Velocities:
         self.__current_linear_velocity = self.__update_velocity(
             self.__target_linear_velocity,
@@ -422,7 +430,7 @@ class OculusMobileBaseMapping:
         )
 
         # Publish calculated velocities:
-        self.__publish_twist_velocities()
+        #self.__publish_twist_velocities()
 
         # Publish acceleration algorithm feedback:
         self.__publish_current_motion_parameters()

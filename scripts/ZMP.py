@@ -6,28 +6,27 @@ import rospy
 
 from std_msgs.msg import (Float64MultiArray, Bool)
 from math import sqrt
-from  sensor_msgs.msg import (Imu)
+from sensor_msgs.msg import (Imu)
+
 
 class zmp_simple():
     """
     
     """
 
-    def __init__(
-        self 
-    ):
+    def __init__(self):
         """
         
         """
 
         # # Private constants:
-        self.NODE_NAME='zmp_simple'
-        self.__imu_acc_x_axis=0
-        self.__imu_acc_y_axis=0
-        self.__center_of_mass_robot=[0.001,0.001,0.001]
-        self.__mass_robot=131
-        self.__flag=0
-        self.__count=0
+        self.NODE_NAME = 'zmp_simple'
+        self.__imu_acc_x_axis = 0
+        self.__imu_acc_y_axis = 0
+        self.__center_of_mass_robot = [0.001, 0.001, 0.001]
+        self.__mass_robot = 131
+        self.__flag = 0
+        self.__count = 0
 
         # # Initialization and dependency status topics:
         self.__is_initialized = False
@@ -41,7 +40,7 @@ class zmp_simple():
 
         # NOTE: Specify dependency initial False initial status.
         self.__dependency_status = {
-           # 'dependency_node_name': False,
+            # 'dependency_node_name': False,
         }
 
         # NOTE: Specify dependency is_initialized topic (or any other topic,
@@ -56,22 +55,19 @@ class zmp_simple():
         }
 
         # # Topic publisher:
-    
 
         # # Topic subscriber:
         rospy.Subscriber(
-            '/fetch/imu1', #change
+            '/imu1/imu',  #change
             Imu,
             self.__imu_base_callback,
         )
 
         rospy.Subscriber(
-            'calc_com_total/com_fin', #change
+            'calc_com_total/com_fin',  #change
             Float64MultiArray,
             self.__center_of_mass_robot_callback,
         )
-
-
 
     # # Dependency status callbacks:
     # NOTE: each dependency topic should have a callback function, which will
@@ -83,19 +79,17 @@ class zmp_simple():
 
         self.__dependency_status['dependency_node_name'] = message.data
 
-
-
     # # Topic callbacks:
 
     def __imu_base_callback(self, message):
-        self.__imu_acc_x_axis = message.linear_acceleration[0]
-        self.__imu_acc_y_axis = message.linear_acceleration[1]
-    
+        self.__imu_acc_x_axis = message.linear_acceleration.x
+        self.__imu_acc_y_axis = message.linear_acceleration.y
+
     def __center_of_mass_robot_callback(self, message):
-        self.__center_of_mass_robot=[message.data[0], message.data[1], message.data[2]]
-        self.__mass_robot=message.data[3]
-        
- 
+        self.__center_of_mass_robot = [
+            message.data[0], message.data[1], message.data[2]
+        ]
+        self.__mass_robot = message.data[3]
 
     # # Private methods:
     def __check_initialization(self):
@@ -168,30 +162,43 @@ class zmp_simple():
     # # Public methods:
 
     def __zmp_ass(self):
-        
-        g=9.81
+
+        g = 9.81
         e = 2.7
 
-        acc_robot=[self.__imu_acc_x_axis, self.__imu_acc_y_axis, 0]
-        x_coordinate_zmp=(self.__mass_robot*(acc_robot[2]+g)*self.__center_of_mass_robot[0]-self.__mass_robot*self.__center_of_mass_robot[2]*acc_robot[0])/(self.__mass_robot*(acc_robot[2]+g))
-        y_coordinate_zmp=(self.__mass_robot*(acc_robot[2]+g)*self.__center_of_mass_robot[1]-self.__mass_robot*self.__center_of_mass_robot[2]*acc_robot[1])/(self.__mass_robot*(acc_robot[2]+g))
+        acc_robot = [self.__imu_acc_x_axis, self.__imu_acc_y_axis, 0]
+        x_coordinate_zmp = (
+            self.__mass_robot * g * self.__center_of_mass_robot[0]
+            - self.__mass_robot * self.__center_of_mass_robot[2] * acc_robot[0]
+        ) / (self.__mass_robot * g)
+        y_coordinate_zmp = (
+            self.__mass_robot * g * self.__center_of_mass_robot[1]
+            - self.__mass_robot * self.__center_of_mass_robot[2] * acc_robot[1]
+        ) / (self.__mass_robot * g)
 
-        x_limit_coordinate=-0.221/e
-        y_limit_coordinate=-0.221/e
+        x_limit_coordinate = -0.221 / e
+        y_limit_coordinate = 0.221 / e
 
-        if abs(x_coordinate_zmp)>abs(x_limit_coordinate) and abs(y_coordinate_zmp)>abs(y_limit_coordinate):
-            self.__flag=self.__flag+1
-        elif abs(x_coordinate_zmp)<=abs(x_limit_coordinate) and abs(y_coordinate_zmp)>abs(y_limit_coordinate):
-            self.__flag=self.__flag+1
-        elif abs(x_coordinate_zmp)>abs(x_limit_coordinate) and abs(y_coordinate_zmp)<=abs(y_limit_coordinate):
-            self.__flag=self.__flag+1
-        elif abs(x_coordinate_zmp)<=abs(x_limit_coordinate) and abs(y_coordinate_zmp)<=abs(y_limit_coordinate):
-            self.__flag=0
-        
-        if self.__flag==1:
-            self.__count=self.__count+1
+        if abs(x_coordinate_zmp) > abs(x_limit_coordinate) and abs(
+            y_coordinate_zmp
+        ) > abs(y_limit_coordinate):
+            self.__flag = self.__flag + 1
+        elif abs(x_coordinate_zmp) <= abs(x_limit_coordinate) and abs(
+            y_coordinate_zmp
+        ) > abs(y_limit_coordinate):
+            self.__flag = self.__flag + 1
+        elif abs(x_coordinate_zmp) > abs(x_limit_coordinate) and abs(
+            y_coordinate_zmp
+        ) <= abs(y_limit_coordinate):
+            self.__flag = self.__flag + 1
+        elif abs(x_coordinate_zmp) <= abs(x_limit_coordinate) and abs(
+            y_coordinate_zmp
+        ) <= abs(y_limit_coordinate):
+            self.__flag = 0
+
+        if self.__flag == 1:
+            self.__count = self.__count + 1
             print(f'warning {self.__count}')
-        
 
     def main_loop(self):
         """
@@ -206,8 +213,7 @@ class zmp_simple():
         # NOTE: Add code (function calls), which has to be executed once the
         # node was successfully initialized.
         self.__zmp_ass()
-        
-        
+
     def node_shutdown(self):
         """
         

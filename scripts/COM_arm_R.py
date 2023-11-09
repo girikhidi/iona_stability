@@ -160,51 +160,64 @@ class com_arm_calc():
         mass_link_5 = 0.678
         mass_link_6 = 0.678
         mass_link_7 = 0.500
-        mass_load = 20
+        mass_load = 7
         mass_gripper = 0.925
 
         joint_values = self.__joint_values
 
         matrix_01 = np.array(
             [
-                [cos(joint_values[0]), -sin(joint_values[0]), 0, 0], [-sin(joint_values[0]), -cos(joint_values[0]), 0, 0],
+                [cos(joint_values[0]), -sin(joint_values[0]), 0, 0],
+                [-sin(joint_values[0]), -cos(joint_values[0]), 0, 0],
                 [0, 0, -1, 0.1564], [0, 0, 0, 1]
             ]
         )
         matrix_12 = np.array(
             [
-                [cos(joint_values[1]), -sin(joint_values[1]), 0, 0], [0, 0, -1, 0.0054],
-                [sin(joint_values[1]), cos(joint_values[1]), 0, -0.1284], [0, 0, 0, 1]
+                [cos(joint_values[1]), -sin(joint_values[1]), 0, 0],
+                [0, 0, -1, 0.0054],
+                [sin(joint_values[1]),
+                 cos(joint_values[1]), 0, -0.1284], [0, 0, 0, 1]
             ]
         )
         matrix_23 = np.array(
             [
-                [cos(joint_values[2]), -sin(joint_values[2]), 0, 0], [0, 0, 1, -0.2104],
-                [-sin(joint_values[2]), -cos(joint_values[2]), 0, -0.0064], [0, 0, 0, 1]
+                [cos(joint_values[2]), -sin(joint_values[2]), 0, 0],
+                [0, 0, 1, -0.2104],
+                [-sin(joint_values[2]), -cos(joint_values[2]), 0, -0.0064],
+                [0, 0, 0, 1]
             ]
         )
         matrix_34 = np.array(
             [
-                [cos(joint_values[3]), -sin(joint_values[3]), 0, 0], [0, 0, -1, -0.0064],
-                [sin(joint_values[3]), cos(joint_values[3]), 0, -0.2104], [0, 0, 0, 1]
+                [cos(joint_values[3]), -sin(joint_values[3]), 0, 0],
+                [0, 0, -1, -0.0064],
+                [sin(joint_values[3]),
+                 cos(joint_values[3]), 0, -0.2104], [0, 0, 0, 1]
             ]
         )
         matrix_45 = np.array(
             [
-                [cos(joint_values[4]), -sin(joint_values[4]), 0, 0], [0, 0, 1, -0.2084],
-                [-sin(joint_values[4]), -cos(joint_values[4]), 0, -0.0064], [0, 0, 0, 1]
+                [cos(joint_values[4]), -sin(joint_values[4]), 0, 0],
+                [0, 0, 1, -0.2084],
+                [-sin(joint_values[4]), -cos(joint_values[4]), 0, -0.0064],
+                [0, 0, 0, 1]
             ]
         )
         matrix_56 = np.array(
             [
-                [cos(joint_values[5]), -sin(joint_values[5]), 0, 0], [0, 0, -1, 0],
-                [sin(joint_values[5]), cos(joint_values[5]), 0, -0.1059], [0, 0, 0, 1]
+                [cos(joint_values[5]), -sin(joint_values[5]), 0, 0],
+                [0, 0, -1, 0],
+                [sin(joint_values[5]),
+                 cos(joint_values[5]), 0, -0.1059], [0, 0, 0, 1]
             ]
         )
         matrix_67 = np.array(
             [
-                [cos(joint_values[6]), -sin(joint_values[6]), 0, 0], [0, 0, 1, -0.1059],
-                [-sin(joint_values[6]), -cos(joint_values[6]), 0, 0], [0, 0, 0, 1]
+                [cos(joint_values[6]), -sin(joint_values[6]), 0, 0],
+                [0, 0, 1, -0.1059],
+                [-sin(joint_values[6]), -cos(joint_values[6]), 0, 0],
+                [0, 0, 0, 1]
             ]
         )
         matrix_7L = np.array(
@@ -215,65 +228,123 @@ class com_arm_calc():
         center_of_mass_load = np.array([0, 0, 0.08765])
 
         center_of_mass_base = np.array([-0.000648, -0.000166, 0.084487])
-        center_of_mass_link_1 = np.dot(matrix_01, np.array([-0.000023, -0.010364, -0.073360, 1]).transpose())
-        center_of_mass_link_2 = np.dot(np.dot(matrix_01, matrix_12), np.array([-0.000044, -0.099580, -0.013278, 1]).transpose())
+        center_of_mass_link_1 = np.dot(
+            matrix_01,
+            np.array([-0.000023, -0.010364, -0.073360, 1]).transpose()
+        )
+        center_of_mass_link_2 = np.dot(
+            np.dot(matrix_01, matrix_12),
+            np.array([-0.000044, -0.099580, -0.013278, 1]).transpose()
+        )
         center_of_mass_link_3 = np.dot(
-            np.dot(np.dot(matrix_01, matrix_12), matrix_23), np.array([-0.000044, -0.006641, -0.117892, 1]).transpose()
+            np.dot(np.dot(matrix_01, matrix_12), matrix_23),
+            np.array([-0.000044, -0.006641, -0.117892, 1]).transpose()
         )
         center_of_mass_link_4 = np.dot(
-            np.dot(np.dot(np.dot(matrix_01, matrix_12), matrix_23), matrix_34), np.array([-0.000018, -0.075478, -0.015006, 1]).transpose()
+            np.dot(np.dot(np.dot(matrix_01, matrix_12), matrix_23), matrix_34),
+            np.array([-0.000018, -0.075478, -0.015006, 1]).transpose()
         )
         center_of_mass_link_5 = np.dot(
-            np.dot(np.dot(np.dot(np.dot(matrix_01, matrix_12), matrix_23), matrix_34), matrix_45),
+            np.dot(
+                np.dot(
+                    np.dot(np.dot(matrix_01, matrix_12), matrix_23), matrix_34
+                ), matrix_45
+            ),
             np.array([0.000001, -0.009432, -0.063883, 1]).transpose()
         )
         center_of_mass_link_6 = np.dot(
             np.dot(
-                np.dot(np.dot(np.dot(np.dot(matrix_01, matrix_12), matrix_23), matrix_34), matrix_45), matrix_56
-            ), np.array([0.000001, -0.045483, -0.009650, 1]).transpose()
+                np.dot(
+                    np.dot(
+                        np.dot(np.dot(matrix_01, matrix_12), matrix_23),
+                        matrix_34
+                    ), matrix_45
+                ), matrix_56
+            ),
+            np.array([0.000001, -0.045483, -0.009650, 1]).transpose()
         )
         center_of_mass_link_7 = np.dot(
             np.dot(
                 np.dot(
-                    np.dot(np.dot(np.dot(np.dot(matrix_01, matrix_12), matrix_23), matrix_34), matrix_45), matrix_56
+                    np.dot(
+                        np.dot(
+                            np.dot(np.dot(matrix_01, matrix_12), matrix_23),
+                            matrix_34
+                        ), matrix_45
+                    ), matrix_56
                 ), matrix_67
-            ), np.array([-0.000281, -0.011402, -0.029798, 1]).transpose()
+            ),
+            np.array([-0.000281, -0.011402, -0.029798, 1]).transpose()
         )
 
         transformation_matrix_load = np.dot(
             np.dot(
                 np.dot(
-                    np.dot(np.dot(np.dot(np.dot(matrix_01, matrix_12), matrix_23), matrix_34), matrix_45), matrix_56
+                    np.dot(
+                        np.dot(
+                            np.dot(np.dot(matrix_01, matrix_12), matrix_23),
+                            matrix_34
+                        ), matrix_45
+                    ), matrix_56
                 ), matrix_67
             ), matrix_7L
         )
 
         mass_load_combined = mass_load + mass_gripper
         center_of_mass_load_combined = np.array(
-            [0, 0, (center_of_mass_gripper[2] * mass_gripper + center_of_mass_load[2] * mass_load) / mass_load_combined, 1]
+            [
+                0, 0,
+                (
+                    center_of_mass_gripper[2] * mass_gripper
+                    + center_of_mass_load[2] * mass_load
+                ) / mass_load_combined, 1
+            ]
         )
-        center_of_mass_load_combined = np.dot(transformation_matrix_load, center_of_mass_load_combined.transpose())
+        center_of_mass_load_combined = np.dot(
+            transformation_matrix_load, center_of_mass_load_combined.transpose()
+        )
 
         x_center_of_mass_arm = (
-            center_of_mass_base[0] * mass_base + center_of_mass_link_1[0] * mass_link_1 + center_of_mass_link_2[0] * mass_link_2
-            + center_of_mass_link_3[0] * mass_link_3 + center_of_mass_link_4[0] * mass_link_4 + center_of_mass_link_5[0] * mass_link_5
-            + center_of_mass_link_6[0] * mass_link_6 + center_of_mass_link_7[0] * mass_link_7 + center_of_mass_load_combined[0] * mass_load_combined
-        ) / (mass_base + mass_link_1 + mass_link_2 + mass_link_3 + mass_link_4 + mass_link_5 + mass_link_6 + mass_link_7 + mass_load_combined)
+            center_of_mass_base[0] * mass_base + center_of_mass_link_1[0]
+            * mass_link_1 + center_of_mass_link_2[0] * mass_link_2
+            + center_of_mass_link_3[0] * mass_link_3 + center_of_mass_link_4[0]
+            * mass_link_4 + center_of_mass_link_5[0] * mass_link_5
+            + center_of_mass_link_6[0] * mass_link_6 + center_of_mass_link_7[0]
+            * mass_link_7 + center_of_mass_load_combined[0] * mass_load_combined
+        ) / (
+            mass_base + mass_link_1 + mass_link_2 + mass_link_3 + mass_link_4
+            + mass_link_5 + mass_link_6 + mass_link_7 + mass_load_combined
+        )
 
         y_center_of_mass_arm = (
-            center_of_mass_base[1] * mass_base + center_of_mass_link_1[1] * mass_link_1 + center_of_mass_link_2[1] * mass_link_2
-            + center_of_mass_link_3[1] * mass_link_3 + center_of_mass_link_4[1] * mass_link_4 + center_of_mass_link_5[1] * mass_link_5
-            + center_of_mass_link_6[1] * mass_link_6 + center_of_mass_link_7[1] * mass_link_7 + center_of_mass_load_combined[1] * mass_load_combined
-        ) / (mass_base + mass_link_1 + mass_link_2 + mass_link_3 + mass_link_4 + mass_link_5 + mass_link_6 + mass_link_7 + mass_load_combined)
+            center_of_mass_base[1] * mass_base + center_of_mass_link_1[1]
+            * mass_link_1 + center_of_mass_link_2[1] * mass_link_2
+            + center_of_mass_link_3[1] * mass_link_3 + center_of_mass_link_4[1]
+            * mass_link_4 + center_of_mass_link_5[1] * mass_link_5
+            + center_of_mass_link_6[1] * mass_link_6 + center_of_mass_link_7[1]
+            * mass_link_7 + center_of_mass_load_combined[1] * mass_load_combined
+        ) / (
+            mass_base + mass_link_1 + mass_link_2 + mass_link_3 + mass_link_4
+            + mass_link_5 + mass_link_6 + mass_link_7 + mass_load_combined
+        )
 
         z_center_of_mass_arm = (
-            center_of_mass_base[2] * mass_base + center_of_mass_link_1[2] * mass_link_1 + center_of_mass_link_2[2] * mass_link_2
-            + center_of_mass_link_3[2] * mass_link_3 + center_of_mass_link_4[2] * mass_link_4 + center_of_mass_link_5[2] * mass_link_5
-            + center_of_mass_link_6[2] * mass_link_6 + center_of_mass_link_7[2] * mass_link_7 + center_of_mass_load_combined[2] * mass_load_combined
-        ) / (mass_base + mass_link_1 + mass_link_2 + mass_link_3 + mass_link_4 + mass_link_5 + mass_link_6 + mass_link_7 + mass_load_combined)
+            center_of_mass_base[2] * mass_base + center_of_mass_link_1[2]
+            * mass_link_1 + center_of_mass_link_2[2] * mass_link_2
+            + center_of_mass_link_3[2] * mass_link_3 + center_of_mass_link_4[2]
+            * mass_link_4 + center_of_mass_link_5[2] * mass_link_5
+            + center_of_mass_link_6[2] * mass_link_6 + center_of_mass_link_7[2]
+            * mass_link_7 + center_of_mass_load_combined[2] * mass_load_combined
+        ) / (
+            mass_base + mass_link_1 + mass_link_2 + mass_link_3 + mass_link_4
+            + mass_link_5 + mass_link_6 + mass_link_7 + mass_load_combined
+        )
 
         mass_total_arm = mass_base + mass_link_1 + mass_link_2 + mass_link_3 + mass_link_4 + mass_link_5 + mass_link_6 + mass_link_7 + mass_load_combined
-        self.__center_of_mass_arm = [x_center_of_mass_arm, y_center_of_mass_arm, z_center_of_mass_arm, mass_total_arm]
+        self.__center_of_mass_arm = [
+            x_center_of_mass_arm, y_center_of_mass_arm, z_center_of_mass_arm,
+            mass_total_arm
+        ]
 
         float64_array = Float64MultiArray()
         float64_array.data = self.__center_of_mass_arm

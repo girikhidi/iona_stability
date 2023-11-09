@@ -86,7 +86,9 @@ class zmp_forw():
         self.__current_linear_acceleration = message.data[0]
 
     def __center_of_mass_robot_callback(self, message):
-        self.__robot_total_mass = [message.data[0], message.data[1], message.data[2]]
+        self.__robot_total_mass = [
+            message.data[0], message.data[1], message.data[2]
+        ]
         self.__total_mass_robot = message.data[3]
 
     # # Private methods:
@@ -175,29 +177,43 @@ class zmp_forw():
         tga = self.__robot_total_mass[1] / self.__robot_total_mass[0]
 
         acc_x_axis_max = (
-            x_limit_coordinate * self.__total_mass_robot * g - self.__total_mass_robot * self.__robot_total_mass[0]*g
+            x_limit_coordinate * self.__total_mass_robot * g
+            - self.__total_mass_robot * self.__robot_total_mass[0] * g
         ) / (-self.__total_mass_robot * self.__robot_total_mass[2])
 
         acc_y_axis_max = (
-            y_limit_coordinate * self.__total_mass_robot * g - self.__total_mass_robot * self.__robot_total_mass[1]*g
+            y_limit_coordinate * self.__total_mass_robot * g
+            - self.__total_mass_robot * self.__robot_total_mass[1] * g
         ) / (-self.__total_mass_robot * self.__robot_total_mass[2])
 
-        acc_centrifugal_max = (acc_x_axis_max - tga * acc_y_axis_max
-                   - current_linear_acc) / (-cosa - tga * sina)
+        acc_centrifugal_max = (
+            acc_x_axis_max - tga * acc_y_axis_max - current_linear_acc
+        ) / (-cosa - tga * sina)
 
-        acc_tangential_max = (acc_y_axis_max - sina * acc_centrifugal_max) / (cosa)
+        acc_tangential_max = (acc_y_axis_max
+                              - sina * acc_centrifugal_max) / (cosa)
 
         acc_centrifugal_max = abs(acc_centrifugal_max)
         acc_tangential_max = abs(acc_tangential_max)
 
-        max_rotation_velocity = math.sqrt(acc_centrifugal_max / center_of_mass_distance_to_origin)
+        max_rotation_velocity = math.sqrt(
+            acc_centrifugal_max / center_of_mass_distance_to_origin
+        )
         max_rototation_acceleration = acc_tangential_max / center_of_mass_distance_to_origin
 
         max_linear_acceleration = 0.8 * acc_x_axis_max
 
         float64_array = Float64MultiArray()
-        float64_array.data = [max_linear_acceleration, max_rototation_acceleration, max_rotation_velocity]
-
+        float64_array.data = [
+            max_linear_acceleration, 1.5 * max_rototation_acceleration,
+            max_rotation_velocity
+        ]
+        # print(
+        #     [
+        #         max_linear_acceleration, 1.5 * max_rototation_acceleration,
+        #         max_rotation_velocity
+        #     ]
+        # )
         self.__max_motion_parameters.publish(float64_array)
 
     def main_loop(self):
