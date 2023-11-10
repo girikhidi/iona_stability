@@ -273,7 +273,12 @@ class zmp_inv():
         e = 2.7
         g = 9.81
         x_limit_coordinate = -0.221 / e
-        y_limit_coordinate = 0.221 / e
+
+        if self.__center_of_mass_robot[1]<0:
+            y_limit_coordinate = 0.221 / e
+        else:
+            y_limit_coordinate = -0.221 / e
+
         acc_centrifugal_max = 0
         acc_tangential_max = 0
 
@@ -351,7 +356,6 @@ class zmp_inv():
         e = 2.7
         g = 9.81
         x_limit_coordinate = -0.221 / e
-        y_limit_coordinate = 0.221 / e
         acc_centrifugal_current = 0
         current_rotational_velocity = abs(current_rotational_velocity)
 
