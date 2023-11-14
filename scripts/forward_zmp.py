@@ -112,7 +112,6 @@ class ZMPForw():
         self.__current_linear_acceleration = message.data[0]
 
     def __center_of_mass_robot_callback(self, message):
-
         if not self.__is_initialized:
             self.__dependency_status['iona_com'] = True
 
