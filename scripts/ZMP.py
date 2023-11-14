@@ -199,6 +199,7 @@ class zmp_simple():
         if self.__flag == 1:
             self.__count = self.__count + 1
             print(f'warning {self.__count}')
+            rospy.sleep(1.)
 
     def main_loop(self):
         """
