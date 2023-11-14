@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<launch>
+    <!-- ============================ SETTINGS ============================= -->
+
+    <arg 
+    name="com_name" 
+    default="iona_com"/>
+
+    <arg 
+    name="controller_side" 
+    default="left"/>
+
+    <!-- ======================== END OF SETTINGS ========================== -->
+
+    <group ns="/$(arg robot_name)">   
+        <node 
+        pkg="iona_stability" 
+        type="inverse_zmp.py"
+        name="inverse_zmp" 
+        output="screen">
+            <param 
+            name="com_name" 
+            value="$(arg com_name)"/>
+            <param 
+            name="controller_side" 
+            value="$(arg controller_side)"/>
+        </node>     
+    </group>
+</launch>

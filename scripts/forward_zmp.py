@@ -19,16 +19,22 @@ class ZMPForw():
     
     """
 
-    def __init__(self,):
+    def __init__(
+            self,
+            node_name,
+            com_name,
+        ):
         """
         
         """
 
         # # Private constants:
+        self.__MAX_LINEAR_SPEED = 0.5
+        self.__COM_NAME=com_name
 
         # # Public constants:
-        self.NODE_NAME = 'zmp_forw_acc'
-        self.MAX_LINEAR_SPEED = 0.5
+        self.NODE_NAME = node_name
+        
 
         # # Private variables:
         self.__robot_total_mass = [0.001, 0.001, 0.001]
@@ -49,18 +55,18 @@ class ZMPForw():
         
         # NOTE: Specify dependency initial False initial status.
         self.__dependency_status = {
-            # 'dependency_node_name': False,
+            'iona_com': False,
         }
 
         # NOTE: Specify dependency is_initialized topic (or any other topic,
         # which will be available when the dependency node is running properly).
         self.__dependency_status_topics = {
-            # 'dependency_node_name':
-            #     rospy.Subscriber(
-            #         f'/dependency_node_name/is_initialized',
-            #         Bool,
-            #         self.__dependency_name_callback,
-            #     ),
+            'iona_com':
+                rospy.Subscriber(
+                    f'/{self.__COM_NAME}/is_initialized',
+                    Bool,
+                    self.__center_of_mass_robot_callback,
+                ),
         }
 
         # # Service provider:
@@ -76,7 +82,7 @@ class ZMPForw():
 
         # # Topic subscriber:
         rospy.Subscriber(
-            '/calc_com_total/com_fin',  #change
+            f'/{self.__COM_NAME}/com_fin',  #change
             Float64MultiArray,
             self.__center_of_mass_robot_callback,
         )
@@ -92,12 +98,12 @@ class ZMPForw():
     # # Dependency status callbacks:
     # NOTE: each dependency topic should have a callback function, which will
     # set __dependency_status variable.
-    def __dependency_name_callback(self, message):
-        """Monitors <node_name> is_initialized topic.
+    # def __dependency_name_callback(self, message):
+    #     """Monitors <node_name> is_initialized topic.
         
-        """
+    #     """
 
-        self.__dependency_status['dependency_node_name'] = message.data
+    #     self.__dependency_status['dependency_node_name'] = message.data
 
     # # Service handlers:
     
@@ -106,6 +112,10 @@ class ZMPForw():
         self.__current_linear_acceleration = message.data[0]
 
     def __center_of_mass_robot_callback(self, message):
+
+        if not self.__is_initialized:
+            self.__dependency_status['iona_com'] = True
+
         self.__robot_total_mass = [
             message.data[0], message.data[1], message.data[2]
         ]
@@ -266,15 +276,25 @@ def main():
 
     # # Default node initialization.
     # This name is replaced when a launch file is used.
-    rospy.init_node('zmp_forw_acc')
-
-    class_instance = ZMPForw()
+    rospy.init_node(
+        'forward_zmp',
+         log_level=rospy.INFO,
+    )
 
     rospy.loginfo('\n\n\n\n\n')  # Add whitespaces to separate logs.
 
     # # ROS launch file parameters:
     node_name = rospy.get_name()
 
+    com_name = rospy.get_param(
+        param_name=f'{rospy.get_name()}/com_name',
+        default='iona_com',
+    )
+    
+    class_instance = ZMPForw(
+        node_name=node_name,
+        com_name=com_name,
+    )
 
     rospy.on_shutdown(class_instance.node_shutdown)
 
