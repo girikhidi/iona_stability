@@ -79,43 +79,42 @@ class ZMPInv():
         )
 
         # NOTE: Specify dependency initial False initial status.
-        self.__dependency_status = {
-            'iona_com': False,
-        }
+        self.__dependency_status = {}
+
         # NOTE: Specify dependency is_initialized topic (or any other topic,
         # which will be available when the dependency node is running properly).
-        self.__dependency_status_topics = {
-            'iona_com':
-                rospy.Subscriber(
+        self.__dependency_status_topics = {}
+
+        
+        self.__dependency_status['iona_com'] = False
+       
+        self.__dependency_status_topics['iona_com'] = (
+            rospy.Subscriber(
                     f'/{self.__COM_NAME}/is_initialized',
                     Bool,
-                    self.__center_of_mass_robot_callback,
+                    self.__iona_com_callback,
                 ),
-        }
+        )
 
-        self.__dependency_status = {
-                'chest_logger': False,
-            }        
-        self.__dependency_status_topics = {
-            'chest_logger':
-                rospy.Subscriber(
-                    f'/chest_position',
-                    Point,
-                    self.__chest_position_callback,
-                ),
-        }
+        # self.__dependency_status['chest_logger'] = False
 
-        self.__dependency_status = {
-                'controller_feedback': False,
-            }
-        self.__dependency_status_topics = {
-            'controller_feedback':
+        # self.__dependency_status_topics['chest_logger'] = (
+        #     rospy.Subscriber(
+        #             f'/chest_position',
+        #             Point,
+        #             self.__chest_logger_callback,
+        #         ),
+        # )
+
+        self.__dependency_status['controller_feedback'] = False
+
+        self.__dependency_status_topics['controller_feedback'] = (
                 rospy.Subscriber(
                     f'/{self.CONTROLLER_SIDE}/controller_feedback/is_initialized',
                     Bool,
-                    self.__oculus_joystick_callback,
+                    self.__controller_feedback_callback,
                 ),
-        }
+        )
 
         # # Service provider:
 
@@ -177,13 +176,26 @@ class ZMPInv():
     # # Dependency status callbacks:
     # NOTE: each dependency topic should have a callback function, which will
     # set __dependency_status variable.
-    # def __dependency_name_callback(self, message):
-    #     """Monitors <node_name> is_initialized topic.
+    def __iona_com_callback(self, message):
+        """Monitors <node_name> is_initialized topic.
         
-    #     """
+        """
 
-    #     self.__dependency_status['dependency_node_name'] = message.data
+        self.__dependency_status['iona_com'] = message.data
 
+    def __chest_logger_callback(self, message):
+        """Monitors <node_name> is_initialized topic.
+        
+        """
+
+        self.__dependency_status['chest_logger'] = message.data
+
+    def __controller_feedback_callback(self, message):
+        """Monitors <node_name> is_initialized topic.
+        
+        """
+
+        self.__dependency_status['controller_feedback'] = message.data
     # # Service handlers:
 
     # # Topic callbacks:
@@ -212,8 +224,8 @@ class ZMPInv():
 
     def __chest_position_callback(self, message):
 
-        if not self.__is_initialized:
-            self.__dependency_status['chest_logger'] = True
+        # if not self.__is_initialized:
+        #     self.__dependency_status['chest_logger'] = True
 
         self.__position_chest = message.z
 

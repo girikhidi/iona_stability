@@ -65,7 +65,7 @@ class ZMPForw():
                 rospy.Subscriber(
                     f'/{self.__COM_NAME}/is_initialized',
                     Bool,
-                    self.__center_of_mass_robot_callback,
+                    self.__iona_com_callback,
                 ),
         }
 
@@ -98,12 +98,12 @@ class ZMPForw():
     # # Dependency status callbacks:
     # NOTE: each dependency topic should have a callback function, which will
     # set __dependency_status variable.
-    # def __dependency_name_callback(self, message):
-    #     """Monitors <node_name> is_initialized topic.
+    def __iona_com_callback(self, message):
+        """Monitors <node_name> is_initialized topic.
         
-    #     """
+        """
 
-    #     self.__dependency_status['dependency_node_name'] = message.data
+        self.__dependency_status['iona_com'] = message.data
 
     # # Service handlers:
     
