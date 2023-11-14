@@ -2,36 +2,51 @@
 """
 
 """
+# # Standart libraries:
 import rospy
+from math import cos
+from math import sin
+import numpy as np
+# # Third party libraries:
 
+# # Standart messages and services:
 from std_msgs.msg import (
     Float64MultiArray,
     Bool,
 )
-from gopher_ros_clearcore.srv import (LoggerControl)
-from geometry_msgs.msg import Point
-from math import cos
-from math import sin
-import numpy as np
+from geometry_msgs.msg import (Point,)
 
+# # Third party messages and services:
+from gopher_ros_clearcore.srv import (LoggerControl,)
 
-class cof_total():
+class COMTotal():
     """
     
     """
 
-    def __init__(self):
+    def __init__(self,):
         """
         
         """
 
         # # Private constants:
-
+        self.__LEFT_ARM_USAGE=0
+        self.__RIGHT_ARM_USAGE=1
+        self.__CHEST_USAGE=1
+        self.__STAND_USAGE=1
+        
+        # # Public constants:
         self.NODE_NAME = 'calc_com_total'
-        self.__center_of_mass_right_arm = [0.0, 0.0, 0.0]
-        self.__mass_right_arm = 0
-        self.__position_chest = 0
+        
+        # # Private variables:
 
+        # # Public variables:
+        self.__center_of_mass_right_arm = [0.0, 0.0, 0.0]
+        self.__center_of_mass_left_arm = [0.0, 0.0, 0.0]
+        self.__mass_right_arm = 0
+        self.__mass_left_arm = 0
+        self.__position_chest = 0
+        
         # # Initialization and dependency status topics:
         self.__is_initialized = False
         self.__dependency_initialized = False
@@ -80,17 +95,29 @@ class cof_total():
         )
 
         # # Topic subscriber:
-        rospy.Subscriber(
-            'calc_com_arm_r/com_arm_r',  #change
-            Float64MultiArray,
-            self.__center_of_mass_right_arm_callback,
-        )
+        if self.__RIGHT_ARM_USAGE:
+            rospy.Subscriber(
+                'calc_com_arm_r/com_arm_r',  #change
+                Float64MultiArray,
+                self.__center_of_mass_right_arm_callback,
+            )
 
-        rospy.Subscriber(
-            '/chest_position',
-            Point,
-            self.__chest_position_callback,
-        )
+        if self.__LEFT_ARM_USAGE:
+            rospy.Subscriber(
+                'calc_com_arm_l/com_arm_l',  #change
+                Float64MultiArray,
+                self.__center_of_mass_left_arm_callback,
+            )
+        if self.__CHEST_USAGE:
+            rospy.Subscriber(
+                '/chest_position',
+                Point,
+                self.__chest_position_callback,
+            )
+
+        # # Topic subscriber:
+
+        # # Timers:
 
     # # Dependency status callbacks:
     # NOTE: each dependency topic should have a callback function, which will
@@ -110,8 +137,15 @@ class cof_total():
         self.__center_of_mass_right_arm = [data[0], data[1], data[2]]
         self.__mass_right_arm  = data[3]
 
+    def __center_of_mass_left_arm_callback(self, message):
+        data = message.data
+        self.__center_of_mass_left_arm = [data[0], data[1], data[2]]
+        self.__mass_left_arm  = data[3]
+
     def __chest_position_callback(self, message):
         self.__position_chest = message.z / 1000
+
+    # Timer callbacks:
 
     # # Private methods:
     def __check_initialization(self):
@@ -185,17 +219,32 @@ class cof_total():
     # # Public methods:
     def calc_total(self):
         mass_base = 68
-        mass_vertical = 39.107
-        mass_base_combined = mass_base + mass_vertical
-        mass_chest = 17.316
+        if self.__STAND_USAGE:
+            mass_vertical = 39.107
+        else:
+            mass_vertical=0
+        if self.__CHEST_USAGE:
+            mass_chest = 17.316
+        else:
+            mass_chest=0
+        if not self.__RIGHT_ARM_USAGE:
+            self.__mass_right_arm=0
+        if not self.__LEFT_ARM_USAGE:
+            self.__mass_left_arm=0
+
         height_base = 0.359
         height_chest = 0.386  # height of the origin of the cheat coordinate system
         height_vertical = 0.56219  # height of center of mass of a stand
-        x_arm_translation = 0.1375  # x transition of the robot in the frame of a chest
-        y_arm_translation = 0.139  # y transition of the robot in the frame of a chest
-        z_arm_translation = 0.1925  # z transition of the robot in the frame of a chest
+        x_right_arm_translation = 0.1375  # x transition of the robot in the frame of a chest
+        y_right_arm_translation = 0.139  # y transition of the robot in the frame of a chest
+        z_right_arm_translation = 0.1925  # z transition of the robot in the frame of a chest
+        x_left_arm_translation = 0.1375  # x transition of the robot in the frame of a chest
+        y_left_arm_translation = -0.139  # y transition of the robot in the frame of a chest
+        z_left_arm_translation = 0.1925  # z transition of the robot in the frame of a chest
         arm_mounting_angle = 45 * np.pi / 180
         chest_offset = 0.0995
+
+        mass_base_combined = mass_base + mass_vertical
 
         center_of_mass_right_arm = np.array(
             [
@@ -203,6 +252,14 @@ class cof_total():
                 [self.__center_of_mass_right_arm[2]], [1]
             ]
         )
+
+        center_of_mass_left_arm = np.array(
+            [
+                [self.__center_of_mass_left_arm[0]], [self.__center_of_mass_left_arm[1]],
+                [self.__center_of_mass_left_arm[2]], [1]
+            ]
+        )
+
         center_of_mass_base = np.array([[0.0024], [0], [0.180], [1]])
         center_of_mass_vertical_part = np.array([[-0.06945], [-0.0016], [height_base + height_vertical], [1]])
         x_center_of_mass_combined = (center_of_mass_base[0] * mass_base
@@ -231,19 +288,20 @@ class cof_total():
 
         center_of_mass_chest_bottom_position = np.dot(transformation_01_no_chest, np.array([[0.08581], [0], [0.172112], [1]]))
 
-        rotation_z_axis = np.array(
+        # Right arm
+        rotation_z_axis_right = np.array(
             [[0, 1, 0, 0], [-1, 0, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
         )
-        translation_x_axis = np.array(
-            [[1, 0, 0, x_arm_translation], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
+        translation_x_axis_right = np.array(
+            [[1, 0, 0, x_right_arm_translation], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
         )
-        translation_y_axis = np.array(
-            [[1, 0, 0, 0], [0, 1, 0, y_arm_translation], [0, 0, 1, 0], [0, 0, 0, 1]]
+        translation_y_axis_right = np.array(
+            [[1, 0, 0, 0], [0, 1, 0, y_right_arm_translation], [0, 0, 1, 0], [0, 0, 0, 1]]
         )
-        translation_z_axis = np.array(
-            [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, z_arm_translation], [0, 0, 0, 1]]
+        translation_z_axis_right = np.array(
+            [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, z_right_arm_translation], [0, 0, 0, 1]]
         )
-        rotation_y_axis = np.array(
+        rotation_y_axis_right = np.array(
             [
                 [cos(arm_mounting_angle), 0, sin(arm_mounting_angle), 0], [0, 1, 0, 0],
                 [-sin(arm_mounting_angle), 0, cos(arm_mounting_angle), 0], [0, 0, 0, 1]
@@ -253,36 +311,67 @@ class cof_total():
         center_of_mass_right_arm = np.dot(
             np.dot(
                 np.dot(
-                    np.dot(np.dot(np.dot(transformation_01, rotation_z_axis), translation_x_axis), translation_y_axis),
-                    translation_z_axis
-                ), rotation_y_axis
+                    np.dot(np.dot(np.dot(transformation_01, rotation_z_axis_right), translation_x_axis_right), translation_y_axis_right),
+                    translation_z_axis_right
+                ), rotation_y_axis_right
             ), center_of_mass_right_arm
         )
 
+        # Left arm
+        rotation_z_axis_left = np.array(
+            [[0, -1, 0, 0], [1, 0, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
+        )
+        translation_x_axis_left = np.array(
+            [[1, 0, 0, x_left_arm_translation], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
+        )
+        translation_y_axis_left = np.array(
+            [[1, 0, 0, 0], [0, 1, 0, y_left_arm_translation], [0, 0, 1, 0], [0, 0, 0, 1]]
+        )
+        translation_z_axis_left = np.array(
+            [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, z_left_arm_translation], [0, 0, 0, 1]]
+        )
+        rotation_y_axis_left = np.array(
+            [
+                [cos(arm_mounting_angle), 0, sin(arm_mounting_angle), 0], [0, 1, 0, 0],
+                [-sin(arm_mounting_angle), 0, cos(arm_mounting_angle), 0], [0, 0, 0, 1]
+            ]
+        )
+
+        center_of_mass_left_arm = np.dot(
+            np.dot(
+                np.dot(
+                    np.dot(np.dot(np.dot(transformation_01, rotation_z_axis_left), translation_x_axis_left), translation_y_axis_left),
+                    translation_z_axis_left
+                ), rotation_y_axis_left
+            ), center_of_mass_left_arm
+        )
+        
+        # Total center of mass
         x_center_of_mass_robot = (
             Mass_pos_base[0] * mass_base_combined + center_of_mass_chest[0] * mass_chest
-            + center_of_mass_right_arm[0] * self.__mass_right_arm 
-        ) / (self.__mass_right_arm  + mass_chest + mass_base_combined)
+            + center_of_mass_right_arm[0] * self.__mass_right_arm + center_of_mass_left_arm[0] * self.__mass_left_arm 
+        ) / (self.__mass_right_arm  + mass_chest + mass_base_combined + self.__mass_left_arm)
         y_center_of_mass_robot = (
             Mass_pos_base[1] * mass_base_combined + center_of_mass_chest[1] * mass_chest
-            + center_of_mass_right_arm[1] * self.__mass_right_arm 
-        ) / (self.__mass_right_arm  + mass_chest + mass_base_combined)
+            + center_of_mass_right_arm[1] * self.__mass_right_arm + center_of_mass_left_arm[1] * self.__mass_left_arm
+        ) / (self.__mass_right_arm  + mass_chest + mass_base_combined + self.__mass_left_arm)
         z_center_of_mass_robot = (
             Mass_pos_base[2] * mass_base_combined + center_of_mass_chest[2] * mass_chest
-            + center_of_mass_right_arm[2] * self.__mass_right_arm 
-        ) / (self.__mass_right_arm  + mass_chest + mass_base_combined)
-
-        z_center_of_mass_robot_chest_bottom_position = (
-            Mass_pos_base[2] * mass_base_combined + center_of_mass_chest_bottom_position[2]
-            * mass_chest + center_of_mass_right_arm[2] * self.__mass_right_arm 
-        ) / (self.__mass_right_arm  + mass_chest + mass_base_combined)
-
+            + center_of_mass_right_arm[2] * self.__mass_right_arm + center_of_mass_left_arm[2] * self.__mass_left_arm
+        ) / (self.__mass_right_arm  + mass_chest + mass_base_combined + self.__mass_left_arm)
+        
         robot_total_mass = self.__mass_right_arm  + mass_chest + mass_base_combined
         center_of_mass_robot = [x_center_of_mass_robot[0], y_center_of_mass_robot[0], z_center_of_mass_robot[0], robot_total_mass]
         float64_array = Float64MultiArray()
         float64_array.data = center_of_mass_robot
 
         self.__publisher.publish(float64_array)
+
+        # Chest bottom position
+        z_center_of_mass_robot_chest_bottom_position = (
+            Mass_pos_base[2] * mass_base_combined + center_of_mass_chest_bottom_position[2]
+            * mass_chest + center_of_mass_right_arm[2] * self.__mass_right_arm + center_of_mass_left_arm[2] * self.__mass_left_arm
+        ) / (self.__mass_right_arm  + mass_chest + mass_base_combined + self.__mass_left_arm)
 
         center_of_mass_chest_bottom = Float64MultiArray()
         center_of_mass_chest_bottom.data = z_center_of_mass_robot_chest_bottom_position
@@ -324,9 +413,14 @@ def main():
 
     # # Default node initialization.
     # This name is replaced when a launch file is used.
-    rospy.init_node('calc_com_total')
+    rospy.init_node('calc_com_total', )
 
-    class_instance = cof_total()
+    rospy.loginfo('\n\n\n\n\n')  # Add whitespaces to separate logs.
+
+    # # ROS launch file parameters:
+    node_name = rospy.get_name()
+
+    class_instance = COMTotal()
 
     rospy.on_shutdown(class_instance.node_shutdown)
 

@@ -2,28 +2,40 @@
 """
 
 """
-import rospy
 
-from std_msgs.msg import (Float64MultiArray, Bool)
+# # Standart libraries:
+import rospy
 import math
 
+# # Third party libraries:
 
-class zmp_forw():
+# # Standart messages and services:
+from std_msgs.msg import (Float64MultiArray, Bool)
+
+# # Third party messages and services:
+
+class ZMPForw():
     """
     
     """
 
-    def __init__(self):
+    def __init__(self,):
         """
         
         """
 
         # # Private constants:
+
+        # # Public constants:
         self.NODE_NAME = 'zmp_forw_acc'
         self.MAX_LINEAR_SPEED = 0.5
+
+        # # Private variables:
         self.__robot_total_mass = [0.001, 0.001, 0.001]
         self.__total_mass_robot = 130
         self.__current_linear_acceleration = 0
+
+        # # Public variables:
 
         # # Initialization and dependency status topics:
         self.__is_initialized = False
@@ -34,7 +46,7 @@ class zmp_forw():
             Bool,
             queue_size=1,
         )
-
+        
         # NOTE: Specify dependency initial False initial status.
         self.__dependency_status = {
             # 'dependency_node_name': False,
@@ -50,6 +62,10 @@ class zmp_forw():
             #         self.__dependency_name_callback,
             #     ),
         }
+
+        # # Service provider:
+
+        # # Service subscriber:
 
         # # Topic publisher:
         self.__max_motion_parameters = rospy.Publisher(
@@ -71,6 +87,8 @@ class zmp_forw():
             self.__current_motion_parameters_callback,
         )
 
+        # # Timers:
+
     # # Dependency status callbacks:
     # NOTE: each dependency topic should have a callback function, which will
     # set __dependency_status variable.
@@ -81,6 +99,8 @@ class zmp_forw():
 
         self.__dependency_status['dependency_node_name'] = message.data
 
+    # # Service handlers:
+    
     # # Topic callbacks:
     def __current_motion_parameters_callback(self, message):
         self.__current_linear_acceleration = message.data[0]
@@ -167,7 +187,10 @@ class zmp_forw():
         )
         e = 2.7
         x_limit_coordinate = -0.221 / e
-        y_limit_coordinate = 0.221 / e
+        if self.__robot_total_mass[1]<0:
+            y_limit_coordinate = 0.221 / e
+        else:
+            y_limit_coordinate = -0.221 / e
         g = 9.81
         acc_centrifugal_max = 0
         acc_tangential_max = 0
@@ -208,12 +231,6 @@ class zmp_forw():
             max_linear_acceleration, 1.5 * max_rototation_acceleration,
             max_rotation_velocity
         ]
-        # print(
-        #     [
-        #         max_linear_acceleration, 1.5 * max_rototation_acceleration,
-        #         max_rotation_velocity
-        #     ]
-        # )
         self.__max_motion_parameters.publish(float64_array)
 
     def main_loop(self):
@@ -251,7 +268,13 @@ def main():
     # This name is replaced when a launch file is used.
     rospy.init_node('zmp_forw_acc')
 
-    class_instance = zmp_forw()
+    class_instance = ZMPForw()
+
+    rospy.loginfo('\n\n\n\n\n')  # Add whitespaces to separate logs.
+
+    # # ROS launch file parameters:
+    node_name = rospy.get_name()
+
 
     rospy.on_shutdown(class_instance.node_shutdown)
 

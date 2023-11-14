@@ -2,24 +2,31 @@
 """
 
 """
-import rospy
 
+# # Standart libraries:
+import rospy
+import numpy as np
+import math
+
+# # Third party libraries:
+
+# # Standart messages and services:
 from std_msgs.msg import (
     Float64MultiArray,
     Bool,
     Float64,
 )
 from geometry_msgs.msg import Point
-import math
+
+# # Third party messages and services:
 from gopher_ros_clearcore.msg import Position
-import numpy as np
 from oculus_ros.msg import (
     ControllerButtons,
     ControllerJoystick,
 )
 
 
-class zmp_inv():
+class ZMPInv():
     """
     
     """
@@ -30,13 +37,16 @@ class zmp_inv():
         """
 
         # # Private constants:
+        self.MAX_CHEST_VELOCITY = 1.5
+
+        # # Public constants:
         self.NODE_NAME = 'zmp_inv'
         self.CONTROLLER_SIDE = 'left'
-        self.MAX_CHEST_VELOCITY = 1.5
+
+        # # Private variables:
         self.__center_of_mass_robot = [0.001, 0.001, 0.001]
         self.__mass_rob = 130
         self.__position_chest = 0
-        self.__steady_position = 440
         self.__absolute_chest_position = self.__position_chest
         self.__current_linear_acceleration = 0
         self.__current_rotational_acceleration = 0
@@ -50,6 +60,8 @@ class zmp_inv():
         self.__max_linear_acceleration = 0.5
         self.__max_rotation_acceleration = 30
         self.__max_rotation_velocity = 60
+
+        # # Public variables:
 
         # # Initialization and dependency status topics:
         self.__is_initialized = False
@@ -76,6 +88,10 @@ class zmp_inv():
             #         self.__dependency_name_callback,
             #     ),
         }
+
+        # # Service provider:
+
+        # # Service subscriber:
 
         # # Topic publisher:
         self.__error = rospy.Publisher(
@@ -128,6 +144,8 @@ class zmp_inv():
             self.__z_coordinate_chest_bottom_position_callback,
         )
 
+        # # Timers:
+
     # # Dependency status callbacks:
     # NOTE: each dependency topic should have a callback function, which will
     # set __dependency_status variable.
@@ -137,6 +155,8 @@ class zmp_inv():
         """
 
         self.__dependency_status['dependency_node_name'] = message.data
+
+    # # Service handlers:
 
     # # Topic callbacks:
     def __oculus_joystick_callback(self, message):
@@ -162,6 +182,8 @@ class zmp_inv():
         self.__current_linear_acceleration = message.data[0]
         self.__current_rotational_acceleration = message.data[1]
         self.__current_rotational_velocity = message.data[3]
+    
+    # Timer callbacks:
 
     # # Private methods:
     def __check_initialization(self):
@@ -307,15 +329,6 @@ class zmp_inv():
             -self.__mass_rob * self.__z_coordinate_center_of_mass_chest_bottom
         )
 
-        # Chanage the sighn of centrifugal acceleration in x component
-        # acc_centrifugal_max = (acc_x_axis_max - tga * acc_y_axis_max
-        #            - current_linear_acceleration) / (cosa - tga * sina)
-
-        # No centrifugal acc tangential calculation
-        # max_rotation_velocity=0
-        # acc_tangential_max=math.sqrt(pow((acc_x_axis_max-current_linear_acceleration), 2)+pow(acc_y_axis_max, 2))
-
-        # Original
         acc_centrifugal_max = (
             acc_x_axis_max - tga * acc_y_axis_max - current_linear_acceleration
         ) / (-cosa - tga * sina)
@@ -338,16 +351,7 @@ class zmp_inv():
             self.__max_rotation_velocity
         ]
 
-        # print(
-        #     [
-        #         self.__max_linear_acceleration,
-        #         1.5 * self.__max_rotation_acceleration,
-        #     ]
-        # )
-
         self.__max_motion_parameters.publish(float64_array)
-
-        #print(max_linea_acc, max_rot_acc)
 
     def chest_pos_calc(
         self, current_linear_acceleration, current_rotational_velocity,
@@ -369,13 +373,6 @@ class zmp_inv():
             - self.__mass_rob * self.__center_of_mass_robot[0] * g
         ) / (-self.__mass_rob * self.__center_of_mass_robot[2])
 
-        # if current_rotational_velocity < 0.01:
-        #     current_rotational_velocity = 0
-        # if current_rotational_acceleration <= (
-        #     0.21 * self.__max_rotation_velocity
-        # ):
-        #     current_rotational_acceleration = 0
-
         acc_centrifugal_current = -self.__center_of_mass_distance_to_origin * current_rotational_velocity * current_rotational_velocity
         acc_tangential_current = -self.__center_of_mass_distance_to_origin * current_rotational_acceleration
         acc_x_axis_current = -acc_centrifugal_current * cosa + acc_tangential_current * sina + current_linear_acceleration  # - centr may change to +
@@ -392,14 +389,6 @@ class zmp_inv():
             self.__absolute_chest_position = 440
         elif self.__absolute_chest_position <= 20:
             self.__absolute_chest_position = 20
-        # print(
-        #     [
-        #         acc_centrifugal_current, acc_tangential_current,
-        #         current_linear_acceleration
-        #     ]
-        # )
-        #print([acc_x_axis_max_current, acc_x_axis_current])
-        #print(self.__absolute_chest_position)
 
     def __publish_pos(self):
 
@@ -411,11 +400,6 @@ class zmp_inv():
         if self.__control_mode != 'user_control':
             abs_pos_msg.position = self.__absolute_chest_position
             self.__publisher_pos_abs.publish(abs_pos_msg)
-
-        # print(np.array([
-        #     abs_pos_msg.position,
-        #     abs_pos_msg.velocity,
-        # ]).round(3))
 
     def main_loop(self):
         """
@@ -460,7 +444,12 @@ def main():
     # This name is replaced when a launch file is used.
     rospy.init_node('zmp_inv')
 
-    class_instance = zmp_inv()
+    rospy.loginfo('\n\n\n\n\n')  # Add whitespaces to separate logs.
+
+    # # ROS launch file parameters:
+    node_name = rospy.get_name()
+
+    class_instance = ZMPInv()
 
     rospy.on_shutdown(class_instance.node_shutdown)
 

@@ -2,16 +2,22 @@
 """
 
 """
-import rospy
 
-from std_msgs.msg import (Float64MultiArray, Bool)
-from sensor_msgs.msg import JointState
+# # Standart libraries:
+import rospy
 from math import cos
 from math import sin
 import numpy as np
 
+# # Third party libraries:
 
-class com_arm_calc():
+# # Standart messages and services:
+from std_msgs.msg import (Float64MultiArray, Bool)
+from sensor_msgs.msg import JointState
+
+# # Third party messages and services:
+
+class KinovaCOMCalc():
     """
     
     """
@@ -23,10 +29,15 @@ class com_arm_calc():
 
         # # Private constants:
 
+        # # Public constants:
         self.NODE_NAME = 'calc_com_arm_r'
+        self.ROBOTNAME = '/my_gen3'
+
+        # # Private variables:
         self.__center_of_mass_arm = [0.0, 0.0, 0.0, 0.0]
         self.__joint_values = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-        self.ROBOTNAME = '/my_gen3'
+
+        # # Public variables:
 
         # # Initialization and dependency status topics:
         self.__is_initialized = False
@@ -54,6 +65,10 @@ class com_arm_calc():
             #     ),
         }
 
+        # # Service provider:
+
+        # # Service subscriber:
+
         # # Topic publisher:
         self.__publisher = rospy.Publisher(
             f'{self.NODE_NAME}/com_arm_r',
@@ -68,6 +83,8 @@ class com_arm_calc():
             self.__joint_values_callback,
         )
 
+        # # Timers:
+
     # # Dependency status callbacks:
     # NOTE: each dependency topic should have a callback function, which will
     # set __dependency_status variable.
@@ -78,9 +95,13 @@ class com_arm_calc():
 
         self.__dependency_status['dependency_node_name'] = message.data
 
+    # # Service handlers:
+
     # # Topic callbacks:
     def __joint_values_callback(self, message):
         self.__joint_values = message.position
+
+    # Timer callbacks:
 
     # # Private methods:
     def __check_initialization(self):
@@ -152,6 +173,7 @@ class com_arm_calc():
 
     # # Public methods:
     def cacl_com(self):
+        
         mass_base = 1.697
         mass_link_1 = 1.377
         mass_link_2 = 1.1636
@@ -387,7 +409,12 @@ def main():
     # This name is replaced when a launch file is used.
     rospy.init_node('calc_com_arm_r')
 
-    class_instance = com_arm_calc()
+    rospy.loginfo('\n\n\n\n\n')  # Add whitespaces to separate logs.
+
+    # # ROS launch file parameters:
+    node_name = rospy.get_name()
+
+    class_instance = KinovaCOMCalc()
 
     rospy.on_shutdown(class_instance.node_shutdown)
 
