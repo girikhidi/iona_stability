@@ -24,19 +24,30 @@ class COMTotal():
     
     """
 
-    def __init__(self,):
+    def __init__(
+            self,
+            node_name,
+            left_arm_usage,
+            right_arm_usage,
+            chest_usage,
+            stand_usage,
+            left_arm_name,
+            right_arm_name,
+        ):
         """
         
         """
 
         # # Private constants:
-        self.__LEFT_ARM_USAGE=0
-        self.__RIGHT_ARM_USAGE=1
-        self.__CHEST_USAGE=1
-        self.__STAND_USAGE=1
-        
+        self.__LEFT_ARM_USAGE=left_arm_usage
+        self.__RIGHT_ARM_USAGE=right_arm_usage
+        self.__CHEST_USAGE=chest_usage
+        self.__STAND_USAGE=stand_usage
+        self.__LEFT_ARM_NAME=left_arm_name
+        self.__RIGHT_ARM_NAME=right_arm_name
+
         # # Public constants:
-        self.NODE_NAME = 'calc_com_total'
+        self.NODE_NAME = node_name
         
         # # Private variables:
 
@@ -57,21 +68,59 @@ class COMTotal():
             queue_size=1,
         )
 
-        # NOTE: Specify dependency initial False initial status.
-        self.__dependency_status = {
-            # 'dependency_node_name': False,
-        }
 
-        # NOTE: Specify dependency is_initialized topic (or any other topic,
-        # which will be available when the dependency node is running properly).
-        self.__dependency_status_topics = {
-            # 'dependency_node_name':
-            #     rospy.Subscriber(
-            #         f'/dependency_node_name/is_initialized',
-            #         Bool,
-            #         self.__dependency_name_callback,
-            #     ),
-        }
+
+        # NOTE: Specify dependency initial False initial status.
+
+        if self.__LEFT_ARM_USAGE:
+            self.__dependency_status = {
+                self.__LEFT_ARM_NAME: False,
+            }
+
+            # NOTE: Specify dependency is_initialized topic (or any other topic,
+            # which will be available when the dependency node is running properly).
+            self.__dependency_status_topics = {
+                self.__LEFT_ARM_NAME:
+                    rospy.Subscriber(
+                        f'{self.__LEFT_ARM_NAME}/center_of_mass',
+                        Bool,
+                        self.__center_of_mass_left_arm_callback,
+                    ),
+            }
+
+        if self.__RIGHT_ARM_USAGE:
+            self.__dependency_status = {
+                self.__RIGHT_ARM_NAME: False,
+            }
+
+            # NOTE: Specify dependency is_initialized topic (or any other topic,
+            # which will be available when the dependency node is running properly).
+            self.__dependency_status_topics = {
+                self.__RIGHT_ARM_NAME:
+                    rospy.Subscriber(
+                        f'{self.__RIGHT_ARM_NAME}/center_of_mass',
+                        Bool,
+                        self.__center_of_mass_right_arm_callback,
+                    ),
+            }
+
+        if self.__CHEST_USAGE:
+            self.__dependency_status = {
+                'chest_logger': False,
+            }
+
+            # NOTE: Specify dependency is_initialized topic (or any other topic,
+            # which will be available when the dependency node is running properly).
+            self.__dependency_status_topics = {
+                'chest_logger':
+                    rospy.Subscriber(
+                        f'/chest_position',
+                        Point,
+                        self.__chest_position_callback,
+                    ),
+            }
+
+
 
         # # Service provider:
 
@@ -97,14 +146,14 @@ class COMTotal():
         # # Topic subscriber:
         if self.__RIGHT_ARM_USAGE:
             rospy.Subscriber(
-                'calc_com_arm_r/com_arm_r',  #change
+                f'{self.__RIGHT_ARM_NAME}/center_of_mass',  #change
                 Float64MultiArray,
                 self.__center_of_mass_right_arm_callback,
             )
 
         if self.__LEFT_ARM_USAGE:
             rospy.Subscriber(
-                'calc_com_arm_l/com_arm_l',  #change
+                f'{self.__LEFT_ARM_NAME}/center_of_mass',  #change
                 Float64MultiArray,
                 self.__center_of_mass_left_arm_callback,
             )
@@ -122,27 +171,39 @@ class COMTotal():
     # # Dependency status callbacks:
     # NOTE: each dependency topic should have a callback function, which will
     # set __dependency_status variable.
-    def __dependency_name_callback(self, message):
-        """Monitors <node_name> is_initialized topic.
+    # def __dependency_name_callback(self, message):
+    #     """Monitors <node_name> is_initialized topic.
         
-        """
+    #     """
 
-        self.__dependency_status['dependency_node_name'] = message.data
+    #     self.__dependency_status['dependency_node_name'] = message.data
 
     # # Service handlers:
 
     # # Topic callbacks:
     def __center_of_mass_right_arm_callback(self, message):
+
+        if not self.__is_initialized:
+            self.__dependency_status[self.__RIGHT_ARM_NAME] = True
+
         data = message.data
         self.__center_of_mass_right_arm = [data[0], data[1], data[2]]
         self.__mass_right_arm  = data[3]
 
     def __center_of_mass_left_arm_callback(self, message):
+
+        if not self.__is_initialized:
+            self.__dependency_status[self.__LEFT_ARM_NAME] = True
+
         data = message.data
         self.__center_of_mass_left_arm = [data[0], data[1], data[2]]
         self.__mass_left_arm  = data[3]
 
     def __chest_position_callback(self, message):
+
+        if not self.__is_initialized:
+            self.__dependency_status['chest_logger'] = True
+
         self.__position_chest = message.z / 1000
 
     # Timer callbacks:
@@ -413,14 +474,55 @@ def main():
 
     # # Default node initialization.
     # This name is replaced when a launch file is used.
-    rospy.init_node('calc_com_total', )
+    rospy.init_node(
+        'iona_com',
+        log_level=rospy.INFO, 
+    )
 
     rospy.loginfo('\n\n\n\n\n')  # Add whitespaces to separate logs.
 
     # # ROS launch file parameters:
     node_name = rospy.get_name()
 
-    class_instance = COMTotal()
+    left_arm_usage = rospy.get_param(
+        param_name=f'{rospy.get_name()}/left_arm_usage',
+        default=0,
+    )
+
+    right_arm_usage = rospy.get_param(
+        param_name=f'{rospy.get_name()}/right_arm_usage',
+        default=1,
+    )
+
+    chest_usage = rospy.get_param(
+        param_name=f'{rospy.get_name()}/chest_usage',
+        default=1,
+    )
+    
+    stand_usage = rospy.get_param(
+        param_name=f'{rospy.get_name()}/stand_usage',
+        default=1,
+    )
+
+    left_arm_name = rospy.get_param(
+        param_name=f'{rospy.get_name()}/left_arm_name',
+        default='my_gen4',
+    )
+
+    right_arm_name = rospy.get_param(
+        param_name=f'{rospy.get_name()}/right_arm_name',
+        default='my_gen3',
+    )
+
+    class_instance = COMTotal(
+        node_name=node_name,
+        left_arm_usage=left_arm_usage,
+        right_arm_usage=right_arm_usage,
+        chest_usage=chest_usage,
+        stand_usage=stand_usage,
+        left_arm_name=left_arm_name,
+        right_arm_name=right_arm_name,
+    )
 
     rospy.on_shutdown(class_instance.node_shutdown)
 

@@ -31,18 +31,23 @@ class ZMPInv():
     
     """
 
-    def __init__(self):
+    def __init__(self, 
+                 node_name,
+                 com_name,
+                 controller_side,
+                 ):
         """
         
         """
 
         # # Private constants:
-        self.MAX_CHEST_VELOCITY = 1.5
+        self.__MAX_CHEST_VELOCITY = 1.5
+        self.__CONTROLLER_SIDE = controller_side
+        self.__COM_NAME=com_name
 
         # # Public constants:
-        self.NODE_NAME = 'zmp_inv'
-        self.CONTROLLER_SIDE = 'left'
-
+        self.NODE_NAME = node_name
+        
         # # Private variables:
         self.__center_of_mass_robot = [0.001, 0.001, 0.001]
         self.__mass_rob = 130
@@ -75,18 +80,41 @@ class ZMPInv():
 
         # NOTE: Specify dependency initial False initial status.
         self.__dependency_status = {
-            # 'dependency_node_name': False,
+            'iona_com': False,
         }
-
         # NOTE: Specify dependency is_initialized topic (or any other topic,
         # which will be available when the dependency node is running properly).
         self.__dependency_status_topics = {
-            # 'dependency_node_name':
-            #     rospy.Subscriber(
-            #         f'/dependency_node_name/is_initialized',
-            #         Bool,
-            #         self.__dependency_name_callback,
-            #     ),
+            'iona_com':
+                rospy.Subscriber(
+                    f'/{self.__COM_NAME}/is_initialized',
+                    Bool,
+                    self.__center_of_mass_robot_callback,
+                ),
+        }
+
+        self.__dependency_status = {
+                'chest_logger': False,
+            }        
+        self.__dependency_status_topics = {
+            'chest_logger':
+                rospy.Subscriber(
+                    f'/chest_position',
+                    Point,
+                    self.__chest_position_callback,
+                ),
+        }
+
+        self.__dependency_status = {
+                'controller_feedback': False,
+            }
+        self.__dependency_status_topics = {
+            'controller_feedback':
+                rospy.Subscriber(
+                    f'/{self.CONTROLLER_SIDE}/controller_feedback/is_initialized',
+                    Bool,
+                    self.__oculus_joystick_callback,
+                ),
         }
 
         # # Service provider:
@@ -115,7 +143,7 @@ class ZMPInv():
         # # Topic subscriber:
 
         rospy.Subscriber(
-            'calc_com_total/com_fin',  #change
+            f'/{self.__COM_NAME}/com_fin',  #change
             Float64MultiArray,
             self.__center_of_mass_robot_callback,
         )
@@ -123,7 +151,7 @@ class ZMPInv():
         rospy.Subscriber(
             '/chest_position',
             Point,
-            self.__Chest_Pos_callback,
+            self.__chest_position_callback,
         )
 
         rospy.Subscriber(
@@ -133,13 +161,13 @@ class ZMPInv():
         )
 
         rospy.Subscriber(
-            f'/{self.CONTROLLER_SIDE}/controller_feedback/joystick',
+            f'/{self.__CONTROLLER_SIDE}/controller_feedback/joystick',
             ControllerJoystick,
             self.__oculus_joystick_callback,
         )
 
         rospy.Subscriber(
-            '/calc_com_total/com_fin_no_chest',  #change
+            f'/{self.__COM_NAME}/com_fin_no_chest',  #change
             Float64MultiArray,
             self.__z_coordinate_chest_bottom_position_callback,
         )
@@ -149,12 +177,12 @@ class ZMPInv():
     # # Dependency status callbacks:
     # NOTE: each dependency topic should have a callback function, which will
     # set __dependency_status variable.
-    def __dependency_name_callback(self, message):
-        """Monitors <node_name> is_initialized topic.
+    # def __dependency_name_callback(self, message):
+    #     """Monitors <node_name> is_initialized topic.
         
-        """
+    #     """
 
-        self.__dependency_status['dependency_node_name'] = message.data
+    #     self.__dependency_status['dependency_node_name'] = message.data
 
     # # Service handlers:
 
@@ -164,18 +192,29 @@ class ZMPInv():
 
         """
 
+        if not self.__is_initialized:
+            self.__dependency_status['controller_feedback'] = True
+
         self.__oculus_joystick = message
 
     def __z_coordinate_chest_bottom_position_callback(self, message):
         self.__z_coordinate_center_of_mass_chest_bottom = message.data[0]
 
     def __center_of_mass_robot_callback(self, message):
+
+        if not self.__is_initialized:
+            self.__dependency_status['iona_com'] = True
+
         self.__center_of_mass_robot = [
             message.data[0], message.data[1], message.data[2]
         ]
         self.__mass_rob = message.data[3]
 
-    def __Chest_Pos_callback(self, message):
+    def __chest_position_callback(self, message):
+
+        if not self.__is_initialized:
+            self.__dependency_status['chest_logger'] = True
+
         self.__position_chest = message.z
 
     def __current_motion_parameters_callback(self, message):
@@ -393,7 +432,7 @@ class ZMPInv():
     def __publish_pos(self):
 
         abs_pos_msg = Position()
-        abs_pos_msg.velocity = self.MAX_CHEST_VELOCITY
+        abs_pos_msg.velocity = self.__MAX_CHEST_VELOCITY
 
         self.__joystick_button_state_machine()
 
@@ -442,14 +481,31 @@ def main():
 
     # # Default node initialization.
     # This name is replaced when a launch file is used.
-    rospy.init_node('zmp_inv')
+    rospy.init_node(
+        'inverse_zmp',
+         log_level=rospy.INFO,
+    )
 
     rospy.loginfo('\n\n\n\n\n')  # Add whitespaces to separate logs.
 
     # # ROS launch file parameters:
     node_name = rospy.get_name()
 
-    class_instance = ZMPInv()
+    com_name = rospy.get_param(
+        param_name=f'{rospy.get_name()}/com_name',
+        default='iona_com',
+    )
+
+    controller_side=rospy.get_param(
+        param_name=f'{rospy.get_name()}/controller_side',
+        default='left',
+    )
+
+    class_instance = ZMPInv(
+        node_name=node_name,
+        com_name=com_name,
+        controller_side=controller_side,
+    )
 
     rospy.on_shutdown(class_instance.node_shutdown)
 

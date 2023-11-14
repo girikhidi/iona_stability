@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<launch>
+    <!-- ============================ SETTINGS ============================= -->
+
+    <arg 
+    name="com_name" 
+    default="iona_com"/>
+
+    <!-- ======================== END OF SETTINGS ========================== -->
+
+    <group ns="/$(arg robot_name)">   
+        <node 
+        pkg="iona_stability" 
+        type="forward_zmp.py"
+        name="forward_zmp" 
+        output="screen">
+            <param 
+            name="com_name" 
+            value="$(arg com_name)"/>
+        </node>     
+    </group>
+</launch>
