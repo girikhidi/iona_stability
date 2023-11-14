@@ -5,33 +5,45 @@
 
 # # Standart libraries:
 import rospy
-from math import cos
-from math import sin
+from math import (
+    sin,
+    cos,
+)
 import numpy as np
 
 # # Third party libraries:
 
 # # Standart messages and services:
-from std_msgs.msg import (Float64MultiArray, Bool)
-from sensor_msgs.msg import JointState
+from std_msgs.msg import (
+    Float64MultiArray,
+    Bool,
+)
+from sensor_msgs.msg import (JointState)
 
 # # Third party messages and services:
 
-class KinovaCOMCalc():
+
+class KinovaCOM():
     """
     
     """
 
-    def __init__(self):
+    def __init__(
+        self,
+        node_name,
+        robot_name,
+        gripper_load,
+    ):
         """
         
         """
 
         # # Private constants:
+        self.__GRIPPER_LOAD = gripper_load
+        self.__ROBOT_NAME = robot_name
 
         # # Public constants:
-        self.NODE_NAME = 'calc_com_arm_r'
-        self.ROBOTNAME = '/my_gen3'
+        self.NODE_NAME = node_name
 
         # # Private variables:
         self.__center_of_mass_arm = [0.0, 0.0, 0.0, 0.0]
@@ -51,18 +63,18 @@ class KinovaCOMCalc():
 
         # NOTE: Specify dependency initial False initial status.
         self.__dependency_status = {
-            # 'dependency_node_name': False,
+            'kortex_driver': False,
         }
 
         # NOTE: Specify dependency is_initialized topic (or any other topic,
         # which will be available when the dependency node is running properly).
         self.__dependency_status_topics = {
-            # 'dependency_node_name':
-            #     rospy.Subscriber(
-            #         f'/dependency_node_name/is_initialized',
-            #         Bool,
-            #         self.__dependency_name_callback,
-            #     ),
+            'kortex_driver':
+                rospy.Subscriber(
+                    f'/{self.__ROBOT_NAME}/base_feedback/joint_state',
+                    JointState,
+                    self.__joint_values_callback,
+                ),
         }
 
         # # Service provider:
@@ -71,14 +83,14 @@ class KinovaCOMCalc():
 
         # # Topic publisher:
         self.__publisher = rospy.Publisher(
-            f'{self.NODE_NAME}/com_arm_r',
+            f'{self.NODE_NAME}/center_of_mass',
             Float64MultiArray,
             queue_size=1,
         )
 
         # # Topic subscriber:
         rospy.Subscriber(
-            f'{self.ROBOTNAME}/base_feedback/joint_state',  #change
+            f'/{self.__ROBOT_NAME}/base_feedback/joint_state',
             JointState,
             self.__joint_values_callback,
         )
@@ -88,17 +100,24 @@ class KinovaCOMCalc():
     # # Dependency status callbacks:
     # NOTE: each dependency topic should have a callback function, which will
     # set __dependency_status variable.
-    def __dependency_name_callback(self, message):
-        """Monitors <node_name> is_initialized topic.
-        
-        """
+    # def __dependency_name_callback(self, message):
+    #     """Monitors <node_name> is_initialized topic.
 
-        self.__dependency_status['dependency_node_name'] = message.data
+    #     """
+
+    #     self.__dependency_status['dependency_node_name'] = message.data
 
     # # Service handlers:
 
     # # Topic callbacks:
     def __joint_values_callback(self, message):
+        """
+        
+        """
+
+        if not self.__is_initialized:
+            self.__dependency_status['kortex_driver'] = True
+
         self.__joint_values = message.position
 
     # Timer callbacks:
@@ -171,9 +190,13 @@ class KinovaCOMCalc():
 
         self.__node_is_initialized.publish(self.__is_initialized)
 
-    # # Public methods:
-    def cacl_com(self):
+    def __calculate_com(self):
+        """
         
+        """
+
+        mass_load = self.__GRIPPER_LOAD
+
         mass_base = 1.697
         mass_link_1 = 1.377
         mass_link_2 = 1.1636
@@ -182,16 +205,17 @@ class KinovaCOMCalc():
         mass_link_5 = 0.678
         mass_link_6 = 0.678
         mass_link_7 = 0.500
-        mass_load = 7
         mass_gripper = 0.925
 
         joint_values = self.__joint_values
 
+        # yapf: disable
         matrix_01 = np.array(
             [
                 [cos(joint_values[0]), -sin(joint_values[0]), 0, 0],
                 [-sin(joint_values[0]), -cos(joint_values[0]), 0, 0],
-                [0, 0, -1, 0.1564], [0, 0, 0, 1]
+                [0, 0, -1, 0.1564],
+                [0, 0, 0, 1],
             ]
         )
         matrix_12 = np.array(
@@ -199,7 +223,8 @@ class KinovaCOMCalc():
                 [cos(joint_values[1]), -sin(joint_values[1]), 0, 0],
                 [0, 0, -1, 0.0054],
                 [sin(joint_values[1]),
-                 cos(joint_values[1]), 0, -0.1284], [0, 0, 0, 1]
+                 cos(joint_values[1]), 0, -0.1284],
+                [0, 0, 0, 1],
             ]
         )
         matrix_23 = np.array(
@@ -207,7 +232,7 @@ class KinovaCOMCalc():
                 [cos(joint_values[2]), -sin(joint_values[2]), 0, 0],
                 [0, 0, 1, -0.2104],
                 [-sin(joint_values[2]), -cos(joint_values[2]), 0, -0.0064],
-                [0, 0, 0, 1]
+                [0, 0, 0, 1],
             ]
         )
         matrix_34 = np.array(
@@ -215,7 +240,8 @@ class KinovaCOMCalc():
                 [cos(joint_values[3]), -sin(joint_values[3]), 0, 0],
                 [0, 0, -1, -0.0064],
                 [sin(joint_values[3]),
-                 cos(joint_values[3]), 0, -0.2104], [0, 0, 0, 1]
+                 cos(joint_values[3]), 0, -0.2104],
+                [0, 0, 0, 1],
             ]
         )
         matrix_45 = np.array(
@@ -223,7 +249,7 @@ class KinovaCOMCalc():
                 [cos(joint_values[4]), -sin(joint_values[4]), 0, 0],
                 [0, 0, 1, -0.2084],
                 [-sin(joint_values[4]), -cos(joint_values[4]), 0, -0.0064],
-                [0, 0, 0, 1]
+                [0, 0, 0, 1],
             ]
         )
         matrix_56 = np.array(
@@ -231,7 +257,8 @@ class KinovaCOMCalc():
                 [cos(joint_values[5]), -sin(joint_values[5]), 0, 0],
                 [0, 0, -1, 0],
                 [sin(joint_values[5]),
-                 cos(joint_values[5]), 0, -0.1059], [0, 0, 0, 1]
+                 cos(joint_values[5]), 0, -0.1059],
+                [0, 0, 0, 1],
             ]
         )
         matrix_67 = np.array(
@@ -239,7 +266,7 @@ class KinovaCOMCalc():
                 [cos(joint_values[6]), -sin(joint_values[6]), 0, 0],
                 [0, 0, 1, -0.1059],
                 [-sin(joint_values[6]), -cos(joint_values[6]), 0, 0],
-                [0, 0, 0, 1]
+                [0, 0, 0, 1],
             ]
         )
         matrix_7L = np.array(
@@ -270,7 +297,8 @@ class KinovaCOMCalc():
             np.dot(
                 np.dot(
                     np.dot(np.dot(matrix_01, matrix_12), matrix_23), matrix_34
-                ), matrix_45
+                ),
+                matrix_45,
             ),
             np.array([0.000001, -0.009432, -0.063883, 1]).transpose()
         )
@@ -281,7 +309,8 @@ class KinovaCOMCalc():
                         np.dot(np.dot(matrix_01, matrix_12), matrix_23),
                         matrix_34
                     ), matrix_45
-                ), matrix_56
+                ),
+                matrix_56,
             ),
             np.array([0.000001, -0.045483, -0.009650, 1]).transpose()
         )
@@ -294,7 +323,8 @@ class KinovaCOMCalc():
                             matrix_34
                         ), matrix_45
                     ), matrix_56
-                ), matrix_67
+                ),
+                matrix_67,
             ),
             np.array([-0.000281, -0.011402, -0.029798, 1]).transpose()
         )
@@ -362,16 +392,26 @@ class KinovaCOMCalc():
             + mass_link_5 + mass_link_6 + mass_link_7 + mass_load_combined
         )
 
-        mass_total_arm = mass_base + mass_link_1 + mass_link_2 + mass_link_3 + mass_link_4 + mass_link_5 + mass_link_6 + mass_link_7 + mass_load_combined
-        self.__center_of_mass_arm = [
-            x_center_of_mass_arm, y_center_of_mass_arm, z_center_of_mass_arm,
-            mass_total_arm
-        ]
+        mass_total_arm = (
+            mass_base + mass_link_1 + mass_link_2 + mass_link_3 + mass_link_4
+            + mass_link_5 + mass_link_6 + mass_link_7 + mass_load_combined
+        )
+        self.__center_of_mass_arm = (
+            [
+                x_center_of_mass_arm,
+                y_center_of_mass_arm,
+                z_center_of_mass_arm,
+                mass_total_arm,
+            ]
+        )
+        # yapf: enable
 
         float64_array = Float64MultiArray()
         float64_array.data = self.__center_of_mass_arm
+
         self.__publisher.publish(float64_array)
 
+    # # Public methods:
     def main_loop(self):
         """
         
@@ -384,7 +424,7 @@ class KinovaCOMCalc():
 
         # NOTE: Add code (function calls), which has to be executed once the
         # node was successfully initialized.
-        self.cacl_com()
+        self.__calculate_com()
 
     def node_shutdown(self):
         """
@@ -407,14 +447,31 @@ def main():
 
     # # Default node initialization.
     # This name is replaced when a launch file is used.
-    rospy.init_node('calc_com_arm_r')
+    rospy.init_node(
+        'kinova_com',
+        log_level=rospy.INFO,  # TODO: Make this a launch file parameter.
+    )
 
     rospy.loginfo('\n\n\n\n\n')  # Add whitespaces to separate logs.
 
     # # ROS launch file parameters:
     node_name = rospy.get_name()
 
-    class_instance = KinovaCOMCalc()
+    robot_name = rospy.get_param(
+        param_name=f'{rospy.get_name()}/robot_name',
+        default='my_gen3',
+    )
+
+    gripper_load = rospy.get_param(
+        param_name=f'{rospy.get_name()}/gripper_load',
+        default=0.0,
+    )
+
+    class_instance = KinovaCOM(
+        node_name=node_name,
+        robot_name=robot_name,
+        gripper_load=gripper_load,
+    )
 
     rospy.on_shutdown(class_instance.node_shutdown)
 

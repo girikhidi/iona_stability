@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<launch>
+    <!-- ============================ SETTINGS ============================= -->
+
+    <arg 
+    name="robot_name" 
+    default="my_gen3"/>
+
+    <!-- Gripper load: a load [kg], which the robot gripper is holding. -->
+    <arg 
+    name="gripper_load" 
+    default="0.0"/>
+
+    <!-- ======================== END OF SETTINGS ========================== -->
+
+    <group ns="/$(arg robot_name)">
+        <!-- Kinova Center Of Mass: -->     
+        <node 
+        pkg="iona_stability" 
+        type="kinova_com.py"
+        name="kinova_com" 
+        output="screen">
+            <param 
+            name="robot_name" 
+            value="$(arg robot_name)"/>
+            <param 
+            name="gripper_load" 
+            value="$(arg gripper_load)"/>
+        </node>     
+    </group>
+</launch>
