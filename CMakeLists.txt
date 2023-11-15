@@ -15,6 +15,7 @@ find_package(catkin REQUIRED COMPONENTS
   message_generation
   sensor_msgs
   gopher_ros_clearcore
+  oculus_ros
 )
 
 ## System dependencies are found with CMake's conventions
@@ -78,6 +79,7 @@ find_package(catkin REQUIRED COMPONENTS
   geometry_msgs
   sensor_msgs
   gopher_ros_clearcore
+  oculus_ros
  )
 
 ################################################

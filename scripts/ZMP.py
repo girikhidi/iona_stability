@@ -3,6 +3,8 @@
 
 """
 import rospy
+#import pyttsx3
+import pygame
 
 from std_msgs.msg import (Float64MultiArray, Bool)
 from math import sqrt
@@ -23,10 +25,15 @@ class zmp_simple():
         self.NODE_NAME = 'zmp_simple'
         self.__imu_acc_x_axis = 0
         self.__imu_acc_y_axis = 0
-        self.__center_of_mass_robot = [0.001, 0.001, 0.001]
+        self.__center_of_mass_robot = [0.001, 0.001, 0.5]
         self.__mass_robot = 131
         self.__flag = 0
         self.__count = 0
+        self.__flag_cudasai = 0
+        pygame.init()
+        # self.__engine = pyttsx3.init()
+        # self.__engine.setProperty('volume', 1.0)
+        # self.__engine.setProperty('rate', 150)
 
         # # Initialization and dependency status topics:
         self.__is_initialized = False
@@ -166,6 +173,15 @@ class zmp_simple():
         g = 9.81
         e = 2.7
 
+        if self.__flag_cudasai == 0:
+            sound = pygame.mixer.Sound(
+                '/home/fetch/catkin_workspaces/iona_devel_ws/src/ntmitrii/iona_stability/3026.mp3'
+            )
+        else:
+            sound = pygame.mixer.Sound(
+                '/home/fetch/catkin_workspaces/iona_devel_ws/src/ntmitrii/iona_stability/ah.mp3'
+            )
+
         acc_robot = [self.__imu_acc_x_axis, self.__imu_acc_y_axis, 0]
         x_coordinate_zmp = (
             self.__mass_robot * g * self.__center_of_mass_robot[0]
@@ -198,8 +214,14 @@ class zmp_simple():
 
         if self.__flag == 1:
             self.__count = self.__count + 1
-            print(f'warning {self.__count}')
-            rospy.sleep(1.)
+            print(f'AH count: {self.__count}')
+            # self.__engine.say("KURVA BLAT")
+            # self.__engine.runAndWait()
+            # self.__engine.stop()
+            self.__flag_cudasai = not self.__flag_cudasai
+            sound.play()
+
+            rospy.sleep(1.5)
 
     def main_loop(self):
         """

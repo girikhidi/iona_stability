@@ -12,18 +12,18 @@
 
     <!-- ======================== END OF SETTINGS ========================== -->
 
-    <group ns="/$(arg robot_name)">   
-        <node 
-        pkg="iona_stability" 
-        type="inverse_zmp.py"
-        name="inverse_zmp" 
-        output="screen">
-            <param 
-            name="com_name" 
-            value="$(arg com_name)"/>
-            <param 
-            name="controller_side" 
-            value="$(arg controller_side)"/>
-        </node>     
-    </group>
+  
+    <node 
+    pkg="iona_stability" 
+    type="inverse_zmp.py"
+    name="inverse_zmp" 
+    output="screen">
+        <param 
+        name="com_name" 
+        value="$(arg com_name)"/>
+        <param 
+        name="controller_side" 
+        value="$(arg controller_side)"/>
+    </node>     
+ 
 </launch>
