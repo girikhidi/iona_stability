@@ -16,7 +16,7 @@ from std_msgs.msg import (
     Bool,
     Float64,
 )
-from geometry_msgs.msg import Point
+from geometry_msgs.msg import (Point)
 
 # # Third party messages and services:
 from gopher_ros_clearcore.msg import Position
@@ -31,11 +31,11 @@ class ZMPInv():
     
     """
 
-    def __init__(self, 
-                 node_name,
-                 com_name,
-                 controller_side,
-                 ):
+    def __init__(
+        self,
+        node_name,
+        controller_side,
+    ):
         """
         
         """
@@ -43,11 +43,10 @@ class ZMPInv():
         # # Private constants:
         self.__MAX_CHEST_VELOCITY = 1.5
         self.__CONTROLLER_SIDE = controller_side
-        self.__COM_NAME=com_name
 
         # # Public constants:
         self.NODE_NAME = node_name
-        
+
         # # Private variables:
         self.__center_of_mass_robot = [0.001, 0.001, 0.001]
         self.__mass_rob = 130
@@ -79,42 +78,27 @@ class ZMPInv():
         )
 
         # NOTE: Specify dependency initial False initial status.
-        self.__dependency_status = {}
+        self.__dependency_status = {
+            'iona_com': False,
+            'controller_feedback': False
+        }
 
         # NOTE: Specify dependency is_initialized topic (or any other topic,
         # which will be available when the dependency node is running properly).
-        self.__dependency_status_topics = {}
-
-        
-        self.__dependency_status['iona_com'] = False
-       
-        self.__dependency_status_topics['iona_com'] = (
-            rospy.Subscriber(
-                    f'/{self.__COM_NAME}/is_initialized',
+        self.__dependency_status_topics = {
+            'iona_com':
+                rospy.Subscriber(
+                    f'/iona_com/is_initialized',
                     Bool,
                     self.__iona_com_callback,
                 ),
-        )
-
-        # self.__dependency_status['chest_logger'] = False
-
-        # self.__dependency_status_topics['chest_logger'] = (
-        #     rospy.Subscriber(
-        #             f'/chest_position',
-        #             Point,
-        #             self.__chest_logger_callback,
-        #         ),
-        # )
-
-        self.__dependency_status['controller_feedback'] = False
-
-        self.__dependency_status_topics['controller_feedback'] = (
+            'controller_feedback':
                 rospy.Subscriber(
-                    f'/{self.CONTROLLER_SIDE}/controller_feedback/is_initialized',
+                    f'/{self.__CONTROLLER_SIDE}/controller_feedback/is_initialized',
                     Bool,
                     self.__controller_feedback_callback,
                 ),
-        )
+        }
 
         # # Service provider:
 
@@ -142,7 +126,7 @@ class ZMPInv():
         # # Topic subscriber:
 
         rospy.Subscriber(
-            f'/{self.__COM_NAME}/com_fin',  #change
+            f'/iona_com/center_of_mass',
             Float64MultiArray,
             self.__center_of_mass_robot_callback,
         )
@@ -166,7 +150,7 @@ class ZMPInv():
         )
 
         rospy.Subscriber(
-            f'/{self.__COM_NAME}/com_fin_no_chest',  #change
+            f'/iona_com/center_of_mass_no_chest',  #change
             Float64MultiArray,
             self.__z_coordinate_chest_bottom_position_callback,
         )
@@ -196,6 +180,7 @@ class ZMPInv():
         """
 
         self.__dependency_status['controller_feedback'] = message.data
+
     # # Service handlers:
 
     # # Topic callbacks:
@@ -204,18 +189,19 @@ class ZMPInv():
 
         """
 
-        if not self.__is_initialized:
-            self.__dependency_status['controller_feedback'] = True
-
         self.__oculus_joystick = message
 
     def __z_coordinate_chest_bottom_position_callback(self, message):
+        """
+        
+        """
+
         self.__z_coordinate_center_of_mass_chest_bottom = message.data[0]
 
     def __center_of_mass_robot_callback(self, message):
-
-        if not self.__is_initialized:
-            self.__dependency_status['iona_com'] = True
+        """
+        
+        """
 
         self.__center_of_mass_robot = [
             message.data[0], message.data[1], message.data[2]
@@ -223,17 +209,21 @@ class ZMPInv():
         self.__mass_rob = message.data[3]
 
     def __chest_position_callback(self, message):
-
-        # if not self.__is_initialized:
-        #     self.__dependency_status['chest_logger'] = True
+        """
+        
+        """
 
         self.__position_chest = message.z
 
     def __current_motion_parameters_callback(self, message):
+        """
+        
+        """
+
         self.__current_linear_acceleration = message.data[0]
         self.__current_rotational_acceleration = message.data[1]
         self.__current_rotational_velocity = message.data[3]
-    
+
     # Timer callbacks:
 
     # # Private methods:
@@ -342,15 +332,19 @@ class ZMPInv():
         self,
         current_linear_acceleration,
     ):
+        """
+        
+        """
 
         e = 2.7
         g = 9.81
         x_limit_coordinate = -0.221 / e
 
-        if self.__center_of_mass_robot[1]<0:
-            y_limit_coordinate = 0.221 / e
-        else:
+        if self.__center_of_mass_robot[1] < 0:
             y_limit_coordinate = -0.221 / e
+
+        else:
+            y_limit_coordinate = 0.221 / e
 
         acc_centrifugal_max = 0
         acc_tangential_max = 0
@@ -408,6 +402,10 @@ class ZMPInv():
         self, current_linear_acceleration, current_rotational_velocity,
         current_rotational_acceleration
     ):
+        """
+        
+        """
+
         e = 2.7
         g = 9.81
         x_limit_coordinate = -0.221 / e
@@ -438,10 +436,14 @@ class ZMPInv():
 
         if self.__absolute_chest_position >= 440:
             self.__absolute_chest_position = 440
+
         elif self.__absolute_chest_position <= 20:
             self.__absolute_chest_position = 20
 
     def __publish_pos(self):
+        """
+        
+        """
 
         abs_pos_msg = Position()
         abs_pos_msg.velocity = self.__MAX_CHEST_VELOCITY
@@ -495,7 +497,7 @@ def main():
     # This name is replaced when a launch file is used.
     rospy.init_node(
         'inverse_zmp',
-         log_level=rospy.INFO,
+        log_level=rospy.INFO,
     )
 
     rospy.loginfo('\n\n\n\n\n')  # Add whitespaces to separate logs.
@@ -503,19 +505,13 @@ def main():
     # # ROS launch file parameters:
     node_name = rospy.get_name()
 
-    com_name = rospy.get_param(
-        param_name=f'{rospy.get_name()}/com_name',
-        default='iona_com',
-    )
-
-    controller_side=rospy.get_param(
+    controller_side = rospy.get_param(
         param_name=f'{rospy.get_name()}/controller_side',
         default='left',
     )
 
     class_instance = ZMPInv(
         node_name=node_name,
-        com_name=com_name,
         controller_side=controller_side,
     )
 

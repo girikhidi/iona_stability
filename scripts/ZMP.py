@@ -199,20 +199,23 @@ class zmp_simple():
             y_coordinate_zmp
         ) > abs(y_limit_coordinate):
             self.__flag = self.__flag + 1
+
         elif abs(x_coordinate_zmp) <= abs(x_limit_coordinate) and abs(
             y_coordinate_zmp
         ) > abs(y_limit_coordinate):
             self.__flag = self.__flag + 1
+
         elif abs(x_coordinate_zmp) > abs(x_limit_coordinate) and abs(
             y_coordinate_zmp
         ) <= abs(y_limit_coordinate):
             self.__flag = self.__flag + 1
+
         elif abs(x_coordinate_zmp) <= abs(x_limit_coordinate) and abs(
             y_coordinate_zmp
         ) <= abs(y_limit_coordinate):
             self.__flag = 0
 
-        if self.__flag == 1:
+        if self.__flag > 0:
             self.__count = self.__count + 1
             print(f'AH count: {self.__count}')
             # self.__engine.say("KURVA BLAT")
@@ -221,7 +224,7 @@ class zmp_simple():
             self.__flag_cudasai = not self.__flag_cudasai
             sound.play()
 
-            rospy.sleep(1.5)
+            rospy.sleep(2)
 
     def main_loop(self):
         """

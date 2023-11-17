@@ -3,10 +3,6 @@
     <!-- ============================ SETTINGS ============================= -->
 
     <arg 
-    name="com_name" 
-    default="iona_com"/>
-
-    <arg 
     name="controller_side" 
     default="left"/>
 
@@ -18,9 +14,6 @@
     type="inverse_zmp.py"
     name="inverse_zmp" 
     output="screen">
-        <param 
-        name="com_name" 
-        value="$(arg com_name)"/>
         <param 
         name="controller_side" 
         value="$(arg controller_side)"/>
