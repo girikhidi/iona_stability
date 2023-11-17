@@ -2,56 +2,96 @@
 <launch>
     <!-- ============================ SETTINGS ============================= -->
 
-    <arg 
-    name="left_arm_usage" 
-    default="0"/>
-
+    <!-- Right arm usage: if set to 'true' the right arm will be included in
+    IONA COM calculation. -->
     <arg 
     name="right_arm_usage" 
-    default="1"/>
-
-    <arg 
-    name="chest_usage" 
-    default="1"/>
-
-    <arg 
-    name="stand_usage" 
-    default="1"/>
-
-    <arg 
-    name="left_arm_name" 
-    default="my_gen4"/>
+    default="true"/>
 
     <arg 
     name="right_arm_name" 
     default="my_gen3"/>
 
-    <!-- ======================== END OF SETTINGS ========================== -->
+    <!-- Right arm Y mounting angle: mounting angle [degrees] around Y axis in
+    Kinova CS. -->
+    <arg 
+    name="right_arm_y_mounting_angle" 
+    default="45.0"/> 
+    
+    <!-- Left arm usage: if set to 'true' the left arm will be included in IONA
+    COM calculation. -->
+    <arg 
+    name="left_arm_usage" 
+    default="false"/>
 
-      
+    <arg 
+    name="left_arm_name" 
+    default="left"/> 
+
+    <!-- Left arm Y mounting angle: mounting angle [degrees] around Y axis in
+    Kinova CS. -->
+    <arg 
+    name="left_arm_y_mounting_angle" 
+    default="45.0"/> 
+
+    <!-- Chest usage: if set to 'true' the chest will be included in IONA COM
+    calculation. -->
+    <arg 
+    name="chest_usage" 
+    default="true"/>
+
+    <!-- Chest COM: chest center of mass coordinates [meters] in Chest CS. -->
+    <arg 
+    name="chest_com" 
+    default="[0.0858, 0, 0.1721]"/>
+
+    <!-- Stand usage: if set to 'true' the stand will be included in IONA COM
+    calculation. -->
+    <arg 
+    name="stand_usage" 
+    default="true"/>
+
+    <!-- Stand COM: stand center of mass coordinates [meters] in Stand CS. -->
+    <arg 
+    name="stand_com" 
+    default="[-0.0695, -0.0016, 0.5622]"/>
+
+    <!-- ======================== END OF SETTINGS ========================== -->
+  
     <node 
     pkg="iona_stability" 
     type="iona_com.py"
     name="iona_com" 
     output="screen">
         <param 
-        name="left_arm_usage" 
-        value="$(arg left_arm_usage)"/>
-        <param 
         name="right_arm_usage" 
         value="$(arg right_arm_usage)"/>
         <param 
-        name="chest_usage" 
-        value="$(arg chest_usage)"/>
+        name="right_arm_name" 
+        value="$(arg right_arm_name)"/>
         <param 
-        name="stand_usage" 
-        value="$(arg stand_usage)"/>
+        name="right_arm_y_mounting_angle" 
+        value="$(arg right_arm_y_mounting_angle)"/>
+        <param 
+        name="left_arm_usage" 
+        value="$(arg left_arm_usage)"/>
         <param 
         name="left_arm_name" 
         value="$(arg left_arm_name)"/>
         <param 
-        name="right_arm_name" 
-        value="$(arg right_arm_name)"/>
+        name="left_arm_y_mounting_angle" 
+        value="$(arg left_arm_y_mounting_angle)"/>
+        <param 
+        name="chest_usage" 
+        value="$(arg chest_usage)"/>
+        <param 
+        name="chest_com" 
+        value="$(arg chest_com)"/>
+        <param 
+        name="stand_usage" 
+        value="$(arg stand_usage)"/>
+        <param 
+        name="stand_com" 
+        value="$(arg stand_com)"/>
     </node>     
-    
 </launch>
