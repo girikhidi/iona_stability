@@ -2,9 +2,6 @@
 <launch>
     <!-- ============================ SETTINGS ============================= -->
 
-    <arg 
-    name="com_name" 
-    default="iona_com"/>
 
     <!-- ======================== END OF SETTINGS ========================== -->
 
@@ -13,9 +10,6 @@
     type="forward_zmp.py"
     name="forward_zmp" 
     output="screen">
-        <param 
-        name="com_name" 
-        value="$(arg com_name)"/>
     </node>     
 
 </launch>

@@ -14,27 +14,25 @@ from std_msgs.msg import (Float64MultiArray, Bool)
 
 # # Third party messages and services:
 
-class ZMPForw():
+
+class ForwardZMP():
     """
     
     """
 
     def __init__(
-            self,
-            node_name,
-            com_name,
-        ):
+        self,
+        node_name,
+    ):
         """
         
         """
 
         # # Private constants:
         self.__MAX_LINEAR_SPEED = 0.5
-        self.__COM_NAME=com_name
 
         # # Public constants:
         self.NODE_NAME = node_name
-        
 
         # # Private variables:
         self.__robot_total_mass = [0.001, 0.001, 0.001]
@@ -52,7 +50,7 @@ class ZMPForw():
             Bool,
             queue_size=1,
         )
-        
+
         # NOTE: Specify dependency initial False initial status.
         self.__dependency_status = {
             'iona_com': False,
@@ -63,7 +61,7 @@ class ZMPForw():
         self.__dependency_status_topics = {
             'iona_com':
                 rospy.Subscriber(
-                    f'/{self.__COM_NAME}/is_initialized',
+                    f'/iona_com/is_initialized',
                     Bool,
                     self.__iona_com_callback,
                 ),
@@ -82,7 +80,7 @@ class ZMPForw():
 
         # # Topic subscriber:
         rospy.Subscriber(
-            f'/{self.__COM_NAME}/com_fin',  #change
+            f'/iona_com/center_of_mass',
             Float64MultiArray,
             self.__center_of_mass_robot_callback,
         )
@@ -106,17 +104,24 @@ class ZMPForw():
         self.__dependency_status['iona_com'] = message.data
 
     # # Service handlers:
-    
+
     # # Topic callbacks:
     def __current_motion_parameters_callback(self, message):
+        """
+        
+        """
+
         self.__current_linear_acceleration = message.data[0]
 
     def __center_of_mass_robot_callback(self, message):
-        if not self.__is_initialized:
-            self.__dependency_status['iona_com'] = True
+        """
+        
+        """
 
         self.__robot_total_mass = [
-            message.data[0], message.data[1], message.data[2]
+            message.data[0],
+            message.data[1],
+            message.data[2],
         ]
         self.__total_mass_robot = message.data[3]
 
@@ -189,17 +194,25 @@ class ZMPForw():
         self.__node_is_initialized.publish(self.__is_initialized)
 
     # # Public methods:
-    def max_acc_calc(self, current_linear_acc):  #deal with target acc
+    def max_acc_calc(self, current_linear_acc):
+        """
+        
+        """
+
         center_of_mass_distance_to_origin = math.sqrt(
             self.__robot_total_mass[0] * self.__robot_total_mass[0]
             + self.__robot_total_mass[1] * self.__robot_total_mass[1]
         )
+
         e = 2.7
         x_limit_coordinate = -0.221 / e
-        if self.__robot_total_mass[1]<0:
-            y_limit_coordinate = 0.221 / e
-        else:
+
+        if self.__robot_total_mass[1] < 0:
             y_limit_coordinate = -0.221 / e
+
+        else:
+            y_limit_coordinate = 0.221 / e
+
         g = 9.81
         acc_centrifugal_max = 0
         acc_tangential_max = 0
@@ -237,8 +250,9 @@ class ZMPForw():
 
         float64_array = Float64MultiArray()
         float64_array.data = [
-            max_linear_acceleration, 1.5 * max_rototation_acceleration,
-            max_rotation_velocity
+            max_linear_acceleration,
+            max_rototation_acceleration,
+            max_rotation_velocity,
         ]
         self.__max_motion_parameters.publish(float64_array)
 
@@ -277,7 +291,7 @@ def main():
     # This name is replaced when a launch file is used.
     rospy.init_node(
         'forward_zmp',
-         log_level=rospy.INFO,
+        log_level=rospy.INFO,
     )
 
     rospy.loginfo('\n\n\n\n\n')  # Add whitespaces to separate logs.
@@ -285,15 +299,7 @@ def main():
     # # ROS launch file parameters:
     node_name = rospy.get_name()
 
-    com_name = rospy.get_param(
-        param_name=f'{rospy.get_name()}/com_name',
-        default='iona_com',
-    )
-    
-    class_instance = ZMPForw(
-        node_name=node_name,
-        com_name=com_name,
-    )
+    class_instance = ForwardZMP(node_name=node_name,)
 
     rospy.on_shutdown(class_instance.node_shutdown)
 
